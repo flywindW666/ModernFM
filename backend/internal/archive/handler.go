@@ -1,9 +1,7 @@
 package archive
 
 import (
-	"archive/tar"
 	"archive/zip"
-	"compress/gzip"
 	"fmt"
 	"io"
 	"os"
