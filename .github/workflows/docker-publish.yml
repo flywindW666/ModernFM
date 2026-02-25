@@ -21,6 +21,14 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Debug Secrets (Masked)
+        run: |
+          echo "User: ${{ secrets.DOCKERHUB_USERNAME }}"
+          if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "Error: DOCKERHUB_TOKEN is empty!"
+            exit 1
+          fi
+
       - name: Build and push Backend
         uses: docker/build-push-action@v5
         with:
