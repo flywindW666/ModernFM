@@ -4,33 +4,16 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-redis/redis/v8"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"modern-fm/internal/cache"
-	"modern-fm/internal/indexer"
-	"modern-fm/internal/upload"
-	"modern-fm/internal/transcode"
 	"modern-fm/internal/archive"
+	"modern-fm/internal/indexer"
+	"modern-fm/internal/transcode"
+	"modern-fm/internal/upload"
 )
-
-// FileRecord 模型 (Moved to internal/indexer)
-/*
-type FileRecord struct {
-	ID        uint      `gorm:"primaryKey"`
-	Name      string    `gorm:"index"`
-	FullPath  string    `gorm:"uniqueIndex"`
-	IsDir     bool      `gorm:"index"`
-	Size      int64
-	ModTime   time.Time
-	Extension string    `gorm:"index"`
-}
-*/
 
 func main() {
 	// 初始化 DB
@@ -44,38 +27,52 @@ func main() {
 	r := gin.Default()
 
 	// 1. 路径遍历逻辑
-	// ... (保留之前逻辑)
-
-	// 4. 多节点同步：接收其它节点的变更通知
-	r.POST("/api/internal/sync", func(c *gin.Context) {
-		// 校验 X-Sync-Key
-		// 根据变更事件更新本地索引或触发文件拉取
-		c.JSON(200, gin.H{"status": "received"})
+	r.GET("/api/files/list", func(c *gin.Context) {
+		relPath := c.DefaultQuery("path", "")
+		var files []indexer.FileRecord
+		db.Where("full_path LIKE ?", relPath+"%").Find(&files)
+		c.JSON(200, files)
 	})
 
-	// 5. 远程挂载 API
-	// ... (保留之前逻辑)
+	// 2. 文件上传 (分块)
+	r.POST("/api/files/upload", upload.HandleChunkUpload)
+
+	// 3. 搜索 API
+	r.GET("/api/files/search", func(c *gin.Context) {
+		query := c.Query("q")
+		var results []indexer.FileRecord
+		db.Where("name ILIKE ?", "%"+query+"%").Find(&results)
+		c.JSON(200, results)
+	})
+
+	// 4. 多节点同步
+	r.POST("/api/internal/sync", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "received"})
+	})
 
 	// 6. 视频实时转码流
 	r.GET("/api/video/stream", transcode.StreamVideo)
 
 	// 7. 获取播放器直连列表
-	// ... (保留之前逻辑)
+	r.GET("/api/video/link", func(c *gin.Context) {
+		path := c.Query("path")
+		player := c.Query("player")
+		link := transcode.GeneratePlayerLink(path, c.Request.Host, player)
+		c.JSON(200, gin.H{"link": link})
+	})
 
 	// 8. 压缩/解压 API
 	r.POST("/api/archive/compress", func(c *gin.Context) {
 		var req struct {
 			Paths  []string `json:"paths"`
-			Target string   `json:"target"` // zip 文件名
+			Target string   `json:"target"`
 		}
 		c.ShouldBindJSON(&req)
 		targetZip := filepath.Join("/data", req.Target)
-		
 		var sources []string
 		for _, p := range req.Paths {
 			sources = append(sources, filepath.Join("/data", p))
 		}
-		
 		if err := archive.CompressZip(sources, targetZip); err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
@@ -91,7 +88,6 @@ func main() {
 		c.ShouldBindJSON(&req)
 		src := filepath.Join("/data", req.Source)
 		dest := filepath.Join("/data", req.Dest)
-		
 		if err := archive.Extract(src, dest); err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
