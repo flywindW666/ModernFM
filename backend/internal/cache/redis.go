@@ -10,7 +10,7 @@ import (
 
 type RedisCache struct {
 	client *redis.Client
-	ctx    context.Background()
+	ctx    context.Context
 }
 
 func NewRedisCache(addr string) *RedisCache {
@@ -42,6 +42,6 @@ func (r *RedisCache) GetDirCache(path string) (string, error) {
 func (r *RedisCache) InvalidatePath(path string) {
 	// 简单逻辑：删除该路径及其父目录的缓存
 	r.client.Del(r.ctx, "dir:v1:"+path)
-	parent := "/"+path // 简化处理
+	parent := "/" + path // 简化处理
 	r.client.Del(r.ctx, "dir:v1:"+parent)
 }
