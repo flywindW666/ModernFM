@@ -3,10 +3,12 @@ version: '3.8'
 services:
   # --- 后端 API 服务 ---
   backend:
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME:-flywindW666}/modern-fm-backend:latest
     container_name: modern-fm-backend
+    # 如果本地没有镜像且不想从仓库拉取，可以保留 build 段落
+    # build:
+    #   context: ../backend
+    #   dockerfile: Dockerfile
     restart: always
     environment:
       - DB_URL=postgres://${POSTGRES_USER:-modernfm_user}:${POSTGRES_PASSWORD:-secure_pass_123}@db:5432/${POSTGRES_DB:-modernfm}
@@ -27,10 +29,11 @@ services:
 
   # --- 前端 UI 服务 ---
   frontend:
-    build:
-      context: ../frontend
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME:-flywindW666}/modern-fm-frontend:latest
     container_name: modern-fm-frontend
+    # build:
+    #   context: ../frontend
+    #   dockerfile: Dockerfile
     restart: always
     environment:
       - VITE_API_URL=http://localhost:${API_PORT:-38866}
