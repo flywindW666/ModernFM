@@ -13,10 +13,14 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"modern-fm/internal/cache"
+	"modern-fm/internal/indexer"
 	"modern-fm/internal/upload"
+	"modern-fm/internal/transcode"
+	"modern-fm/internal/archive"
 )
 
-// FileRecord 模型
+// FileRecord 模型 (Moved to internal/indexer)
+/*
 type FileRecord struct {
 	ID        uint      `gorm:"primaryKey"`
 	Name      string    `gorm:"index"`
@@ -26,6 +30,7 @@ type FileRecord struct {
 	ModTime   time.Time
 	Extension string    `gorm:"index"`
 }
+*/
 
 func main() {
 	// 初始化 DB
@@ -34,7 +39,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	db.AutoMigrate(&FileRecord{})
+	db.AutoMigrate(&indexer.FileRecord{})
 
 	r := gin.Default()
 
