@@ -30,16 +30,15 @@ func main() {
 	r.Static("/assets", "./frontend-dist/assets")
 	
 	// 2. 托管 favicon
-	r.File("/favicon.ico", "./frontend-dist/favicon.ico")
+	r.StaticFile("/favicon.ico", "./frontend-dist/favicon.ico")
 
-	// 3. API 路由 (必须在 NoRoute 之前)
+	// 3. API 路由
 	api := r.Group("/api")
 	{
 		api.GET("/files/list", func(c *gin.Context) {
 			relPath := c.DefaultQuery("path", "")
 			var files []indexer.FileRecord
 			
-			// 如果数据库为空，尝试扫描
 			var count int64
 			db.Model(&indexer.FileRecord{}).Count(&count)
 			if count == 0 {
@@ -62,68 +61,64 @@ func main() {
 			db.Where("name ILIKE ?", "%"+query+"%").Find(&results)
 			c.JSON(200, results)
 		})
+
+		// 视频流与链接
 		api.GET("/video/stream", transcode.StreamVideo)
+		api.GET("/video/link", func(c *gin.Context) {
+			path := c.Query("path")
+			player := c.Query("player")
+			link := transcode.GeneratePlayerLink(path, c.Request.Host, player)
+			c.JSON(200, gin.H{"link": link})
+		})
+
+		// 归档操作
+		api.POST("/archive/compress", func(c *gin.Context) {
+			var req struct {
+				Paths  []string `json:"paths"`
+				Target string   `json:"target"`
+			}
+			c.ShouldBindJSON(&req)
+			targetZip := filepath.Join("/data", req.Target)
+			var sources []string
+			for _, p := range req.Paths {
+				sources = append(sources, filepath.Join("/data", p))
+			}
+			if err := archive.CompressZip(sources, targetZip); err != nil {
+				c.JSON(500, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(200, gin.H{"status": "compressed"})
+		})
+
+		api.POST("/archive/extract", func(c *gin.Context) {
+			var req struct {
+				Source string `json:"source"`
+				Dest   string `json:"dest"`
+			}
+			c.ShouldBindJSON(&req)
+			src := filepath.Join("/data", req.Source)
+			dest := filepath.Join("/data", req.Dest)
+			if err := archive.Extract(src, dest); err != nil {
+				c.JSON(500, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(200, gin.H{"status": "extracted"})
+		})
+
+		// 同步接口
+		api.POST("/internal/sync", func(c *gin.Context) {
+			c.JSON(200, gin.H{"status": "received"})
+		})
 	}
 
-	// 4. SPA 兜底路由 (所有非 API、非静态资源的请求都返回 index.html)
+	// 4. SPA 兜底路由
 	r.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
 		if strings.HasPrefix(path, "/api") {
 			c.JSON(404, gin.H{"error": "API endpoint not found"})
 			return
 		}
-		// 返回前端入口文件
 		c.File(filepath.Join("frontend-dist", "index.html"))
-	})
-
-	// 4. 多节点同步
-	r.POST("/api/internal/sync", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "received"})
-	})
-
-	// 6. 视频实时转码流
-	r.GET("/api/video/stream", transcode.StreamVideo)
-
-	// 7. 获取播放器直连列表
-	r.GET("/api/video/link", func(c *gin.Context) {
-		path := c.Query("path")
-		player := c.Query("player")
-		link := transcode.GeneratePlayerLink(path, c.Request.Host, player)
-		c.JSON(200, gin.H{"link": link})
-	})
-
-	// 8. 压缩/解压 API
-	r.POST("/api/archive/compress", func(c *gin.Context) {
-		var req struct {
-			Paths  []string `json:"paths"`
-			Target string   `json:"target"`
-		}
-		c.ShouldBindJSON(&req)
-		targetZip := filepath.Join("/data", req.Target)
-		var sources []string
-		for _, p := range req.Paths {
-			sources = append(sources, filepath.Join("/data", p))
-		}
-		if err := archive.CompressZip(sources, targetZip); err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(200, gin.H{"status": "compressed"})
-	})
-
-	r.POST("/api/archive/extract", func(c *gin.Context) {
-		var req struct {
-			Source string `json:"source"`
-			Dest   string `json:"dest"`
-		}
-		c.ShouldBindJSON(&req)
-		src := filepath.Join("/data", req.Source)
-		dest := filepath.Join("/data", req.Dest)
-		if err := archive.Extract(src, dest); err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(200, gin.H{"status": "extracted"})
 	})
 
 	r.Run(":38866")
