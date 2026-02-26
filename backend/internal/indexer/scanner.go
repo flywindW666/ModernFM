@@ -17,19 +17,18 @@ import (
 // FileRecord 定义文件系统的数据库记录模型
 type FileRecord struct {
 	ID        uint      `gorm:"primaryKey"`
-	ParentID  uint      `gorm:"index"` // 父目录ID，加速目录遍历
+	Parent    string    `gorm:"size:512;index"` // 父目录路径，用于快速查询直接子项
 	Name      string    `gorm:"size:255;index"`
 	FullPath  string    `gorm:"uniqueIndex;column:full_path"`
 	IsDir     bool      `gorm:"index"`
 	Size      int64
 	ModTime   time.Time
 	Extension string    `gorm:"size:100;index"`
-	Hash      string    `gorm:"size:40;index"` // SHA-1，用于排重或校验
+	Hash      string    `gorm:"size:40;index"` 
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
 
-// Indexer 索引管理器
 type Indexer struct {
 	db       *gorm.DB
 	rootDir  string
@@ -37,12 +36,10 @@ type Indexer struct {
 	isRunning bool
 }
 
-// NewIndexer 创建索引器
 func NewIndexer(db *gorm.DB, root string) *Indexer {
-	return &Indexer{db: db, rootDir: root}
+	return &Indexer{db: db, rootDir: filepath.Clean(root)}
 }
 
-// StartFullScan 开始全量扫描索引
 func (ix *Indexer) StartFullScan() {
 	ix.mu.Lock()
 	if ix.isRunning {
@@ -54,16 +51,15 @@ func (ix *Indexer) StartFullScan() {
 
 	defer func() { ix.isRunning = false }()
 
-	log.Printf("Starting full system scan: %s", ix.rootDir)
+	log.Printf("[Indexer] Starting deep scan of: %s", ix.rootDir)
 	
-	// 使用 WalkDir 进行高效遍历 (Go 1.16+)
+	count := 0
 	err := filepath.WalkDir(ix.rootDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			log.Printf("Error accessing path %q: %v\n", path, err)
-			return nil // 忽略无法访问的目录
+			log.Printf("[Indexer] Error accessing %s: %v", path, err)
+			return nil
 		}
 
-		// 忽略根目录自身在数据库中的记录
 		if path == ix.rootDir {
 			return nil
 		}
@@ -74,56 +70,53 @@ func (ix *Indexer) StartFullScan() {
 		}
 		
 		relPath, _ := filepath.Rel(ix.rootDir, path)
-		// 规范化路径分隔符为正斜杠，防止 Windows 环境干扰
 		relPath = filepath.ToSlash(relPath)
 		
-		// 计算文件 Hash (可选，针对大文件可优化为只计算首尾)
-		fileHash := ""
-		if !d.IsDir() && info.Size() < 50*1024*1024 { // 仅对 50MB 以下文件生成完整 Hash
-			fileHash = ix.calculateHash(path)
+		// 计算父路径
+		parent := filepath.ToSlash(filepath.Dir(relPath))
+		if parent == "." {
+			parent = ""
 		}
 
-		// 计算文件 Extension (仅对文件生效，目录后缀置空)
 		fileExt := ""
 		if !d.IsDir() {
 			fileExt = strings.ToLower(filepath.Ext(d.Name()))
 		}
 
 		record := FileRecord{
+			Parent:    parent,
 			Name:      d.Name(),
 			FullPath:  relPath,
 			IsDir:     d.IsDir(),
 			Size:      info.Size(),
 			ModTime:   info.ModTime(),
 			Extension: fileExt,
-			Hash:      fileHash,
 			UpdatedAt: time.Now(),
 		}
 
-		// 使用 Upsert (更新或插入) 逻辑
-		return ix.db.Where("full_path = ?", relPath).
-			Assign(record).
-			FirstOrCreate(&FileRecord{}).Error
+		// 使用更稳定的 Upsert 逻辑
+		if err := ix.db.Where("full_path = ?", relPath).Assign(record).FirstOrCreate(&FileRecord{}).Error; err != nil {
+			log.Printf("[Indexer] DB Error for %s: %v", relPath, err)
+		}
+		
+		count++
+		if count % 1000 == 0 {
+			log.Printf("[Indexer] Indexed %d items...", count)
+		}
+		return nil
 	})
 	
 	if err != nil {
-		log.Printf("WalkDir finished with error: %v", err)
+		log.Printf("[Indexer] Scan finished with fatal error: %v", err)
 	}
-	
-	log.Println("Full scan completed.")
+	log.Printf("[Indexer] Completed. Total items indexed: %d", count)
 }
 
-// calculateHash 生成文件 SHA-1
 func (ix *Indexer) calculateHash(path string) string {
 	f, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
+	if err != nil { return "" }
 	defer f.Close()
-
 	h := sha1.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return ""
-	}
+	if _, err := io.Copy(h, f); err != nil { return "" }
 	return hex.EncodeToString(h.Sum(nil))
 }

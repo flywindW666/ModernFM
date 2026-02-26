@@ -16,7 +16,6 @@ import (
 )
 
 func main() {
-	// 初始化 DB
 	dsn := os.Getenv("DB_URL")
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -26,19 +25,22 @@ func main() {
 
 	r := gin.Default()
 
-	// 1. 静态资源路由 (显式托管 assets 目录)
 	r.Static("/assets", "./frontend-dist/assets")
-	
-	// 2. 托管 favicon
 	r.StaticFile("/favicon.ico", "./frontend-dist/favicon.ico")
 
-	// 3. API 路由
 	api := r.Group("/api")
 	{
+		// 1. 获取文件列表 (优化版: 只获取直接子项)
 		api.GET("/files/list", func(c *gin.Context) {
 			relPath := c.DefaultQuery("path", "")
+			relPath = filepath.ToSlash(filepath.Clean(relPath))
+			if relPath == "." || relPath == "/" {
+				relPath = ""
+			}
+
 			var files []indexer.FileRecord
 			
+			// 如果库为空，自动触发扫描
 			var count int64
 			db.Model(&indexer.FileRecord{}).Count(&count)
 			if count == 0 {
@@ -50,27 +52,31 @@ func main() {
 				return
 			}
 
-			// 修复根目录模糊匹配问题：
-			// 如果是根目录 ("")，我们只需查找所有不包含 "/" 的记录
-			// 如果是子目录，则查找 path/ 开头的记录
-			queryPath := relPath
-			if queryPath != "" && !strings.HasSuffix(queryPath, "/") {
-				queryPath += "/"
-			}
+			// 精确匹配父目录字段，确保只返回直接子项，且不包含自身
+			// 这种方式性能最高，且不会出现根目录显示不全或模糊匹配错误的问题
+			db.Where("parent = ?", relPath).Find(&files)
 			
-			db.Where("full_path LIKE ?", queryPath+"%").Find(&files)
+			log.Printf("[API] Path: '%s', Found: %d", relPath, len(files))
 			c.JSON(200, files)
+		})
+
+		// 2. 强制重新扫描
+		api.POST("/system/rescan", func(c *gin.Context) {
+			root := os.Getenv("ROOT_DIR")
+			if root == "" { root = "/data" }
+			ix := indexer.NewIndexer(db, root)
+			go ix.StartFullScan()
+			c.JSON(200, gin.H{"status": "scan_started"})
 		})
 
 		api.POST("/files/upload", upload.HandleChunkUpload)
 		api.GET("/files/search", func(c *gin.Context) {
 			query := c.Query("q")
 			var results []indexer.FileRecord
-			db.Where("name ILIKE ?", "%"+query+"%").Find(&results)
+			db.Where("name ILIKE ?", "%"+query+"%").Limit(100).Find(&results)
 			c.JSON(200, results)
 		})
 
-		// 视频流与链接
 		api.GET("/video/stream", transcode.StreamVideo)
 		api.GET("/video/link", func(c *gin.Context) {
 			path := c.Query("path")
@@ -79,7 +85,6 @@ func main() {
 			c.JSON(200, gin.H{"link": link})
 		})
 
-		// 归档操作
 		api.POST("/archive/compress", func(c *gin.Context) {
 			var req struct {
 				Paths  []string `json:"paths"`
@@ -112,18 +117,12 @@ func main() {
 			}
 			c.JSON(200, gin.H{"status": "extracted"})
 		})
-
-		// 同步接口
-		api.POST("/internal/sync", func(c *gin.Context) {
-			c.JSON(200, gin.H{"status": "received"})
-		})
 	}
 
-	// 4. SPA 兜底路由
 	r.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
 		if strings.HasPrefix(path, "/api") {
-			c.JSON(404, gin.H{"error": "API endpoint not found"})
+			c.JSON(404, gin.H{"error": "Not Found"})
 			return
 		}
 		c.File(filepath.Join("frontend-dist", "index.html"))
