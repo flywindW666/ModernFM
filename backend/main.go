@@ -26,28 +26,25 @@ func main() {
 
 	r := gin.Default()
 
-	// 1. 优先托管前端静态文件
-	// 如果是静态文件（带后缀的），直接从 frontend-dist 找
+	// 1. 静态资源路由 (必须在 NoRoute 之前)
+	// 托管 assets 目录
+	r.Static("/assets", "./frontend-dist/assets")
+	// 托管 favicon
+	r.StaticFile("/favicon.ico", "./frontend-dist/favicon.ico")
+
+	// 2. SPA 路由支持 (兜底所有 404)
 	r.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
-		// 如果访问的是 API，继续交给路由处理器
+		// 如果是 API 请求但没匹配到路由，返回 404 而不是 index.html
 		if strings.HasPrefix(path, "/api") {
-			c.Next()
+			c.JSON(404, gin.H{"error": "API not found"})
 			return
 		}
-		
-		// 否则尝试提供静态文件
-		fullPath := filepath.Join("frontend-dist", path)
-		if _, err := os.Stat(fullPath); err == nil && !strings.HasSuffix(path, "/") {
-			c.File(fullPath)
-			return
-		}
-		
-		// SPA 路由支持：其他所有非 API 请求都返回 index.html
+		// 返回前端入口
 		c.File(filepath.Join("frontend-dist", "index.html"))
 	})
 
-	// 1. 路径遍历逻辑
+	// 3. 路径遍历逻辑 (API)
 	r.GET("/api/files/list", func(c *gin.Context) {
 		relPath := c.DefaultQuery("path", "")
 		var files []indexer.FileRecord
