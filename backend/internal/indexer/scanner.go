@@ -68,7 +68,11 @@ func (ix *Indexer) StartFullScan() {
 			return nil
 		}
 
-		info, _ := d.Info()
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		
 		relPath, _ := filepath.Rel(ix.rootDir, path)
 		// 规范化路径分隔符为正斜杠，防止 Windows 环境干扰
 		relPath = filepath.ToSlash(relPath)
