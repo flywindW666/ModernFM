@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+    "fmt"
+    "net/http"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/postgres"
@@ -15,27 +17,17 @@ import (
 	"modern-fm/internal/upload"
 )
 
-// SystemConfig 系统配置表
-type SystemConfig struct {
-	ID    uint   `gorm:"primaryKey"`
-	Key   string `gorm:"uniqueIndex"`
-	Value string
-}
-
 func main() {
 	dsn := os.Getenv("DB_URL")
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatal(err)
 	}
-	db.AutoMigrate(&indexer.FileRecord{}, &SystemConfig{})
+	db.AutoMigrate(&indexer.FileRecord{}, &indexer.SystemConfig{})
 
-	// 策略调整：首次启动不再自动全量扫描，仅执行根目录快速索引
 	root := os.Getenv("ROOT_DIR")
 	if root == "" { root = "/data" }
 	ix := indexer.NewIndexer(db, root)
-	
-	// 启动即时索引根目录 (轻量操作)
 	go ix.IndexDir("")
 
 	r := gin.Default()
@@ -45,80 +37,70 @@ func main() {
 
 	api := r.Group("/api")
 	{
-		// 1. 获取文件列表 (触发式按需扫描)
 		api.GET("/files/list", func(c *gin.Context) {
 			relPath := c.DefaultQuery("path", "")
 			relPath = filepath.ToSlash(filepath.Clean(relPath))
 			if relPath == "." || relPath == "/" { relPath = "" }
-
-			// 按需扫描：进入目录时后台启动对该目录的扫描
 			go ix.IndexDir(relPath)
-
 			var files []indexer.FileRecord
 			db.Where("parent = ?", relPath).Find(&files)
 			c.JSON(200, files)
 		})
 
-		// 2. 手动全量扫描 (用户点击确认后触发)
+		// --- 实现下载功能 ---
+		api.GET("/files/download", func(c *gin.Context) {
+			relPath := c.Query("path")
+			fullPath := filepath.Join(root, relPath)
+            // 安全检查，防止路径穿越
+            if !strings.HasPrefix(filepath.Clean(fullPath), filepath.Clean(root)) {
+                c.JSON(403, gin.H{"error": "非法访问"})
+                return
+            }
+			c.FileAttachment(fullPath, filepath.Base(fullPath))
+		})
+
+		// --- 实现上传功能 (分块上传已在 internal/upload 中定义) ---
+		api.POST("/files/upload", upload.HandleChunkUpload)
+
+		// --- 实现文件管理操作 ---
+		api.POST("/files/action", func(c *gin.Context) {
+			var req struct {
+				Action string   `json:"action"`
+				Paths  []string `json:"paths"`
+				Dest   string   `json:"dest"`
+                NewName string  `json:"newName"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(400, gin.H{"error": "参数错误"})
+				return
+			}
+
+			switch req.Action {
+			case "delete":
+				for _, p := range req.Paths {
+					abs := filepath.Join(root, p)
+					os.RemoveAll(abs)
+					db.Where("full_path = ? OR full_path LIKE ?", p, p+"/%").Delete(&indexer.FileRecord{})
+				}
+			case "rename":
+				if len(req.Paths) > 0 {
+					oldRel := req.Paths[0]
+					oldAbs := filepath.Join(root, oldRel)
+					newAbs := filepath.Join(filepath.Dir(oldAbs), req.NewName)
+					os.Rename(oldAbs, newAbs)
+                    // 更新数据库 (简化逻辑: 重新扫描父目录)
+                    go ix.IndexDir(filepath.ToSlash(filepath.Dir(oldRel)))
+				}
+			}
+			c.JSON(200, gin.H{"status": "ok"})
+		})
+
 		api.POST("/system/rescan", func(c *gin.Context) {
 			go ix.StartFullScan()
 			c.JSON(200, gin.H{"status": "full_scan_started"})
 		})
 
-		api.POST("/files/upload", upload.HandleChunkUpload)
-		api.GET("/files/search", func(c *gin.Context) {
-			query := c.Query("q")
-			var results []indexer.FileRecord
-			db.Where("name ILIKE ?", "%"+query+"%").Limit(100).Find(&results)
-			c.JSON(200, results)
-		})
-
 		api.GET("/video/stream", transcode.StreamVideo)
-		api.GET("/video/link", func(c *gin.Context) {
-			path := c.Query("path")
-			player := c.Query("player")
-			link := transcode.GeneratePlayerLink(path, c.Request.Host, player)
-			c.JSON(200, gin.H{"link": link})
-		})
-
-		// 归档操作
-		api.POST("/archive/compress", func(c *gin.Context) {
-			var req struct {
-				Paths  []string `json:"paths"`
-				Target string   `json:"target"`
-			}
-			c.ShouldBindJSON(&req)
-			targetZip := filepath.Join("/data", req.Target)
-			var sources []string
-			for _, p := range req.Paths {
-				sources = append(sources, filepath.Join("/data", p))
-			}
-			if err := archive.CompressZip(sources, targetZip); err != nil {
-				c.JSON(500, gin.H{"error": err.Error()})
-				return
-			}
-			c.JSON(200, gin.H{"status": "compressed"})
-		})
-
-		api.POST("/archive/extract", func(c *gin.Context) {
-			var req struct {
-				Source string `json:"source"`
-				Dest   string `json:"dest"`
-			}
-			c.ShouldBindJSON(&req)
-			src := filepath.Join("/data", req.Source)
-			dest := filepath.Join("/data", req.Dest)
-			if err := archive.Extract(src, dest); err != nil {
-				c.JSON(500, gin.H{"error": err.Error()})
-				return
-			}
-			c.JSON(200, gin.H{"status": "extracted"})
-		})
-
-		// 同步接口
-		api.POST("/internal/sync", func(c *gin.Context) {
-			c.JSON(200, gin.H{"status": "received"})
-		})
 	}
 
 	r.NoRoute(func(c *gin.Context) {
