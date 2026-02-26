@@ -39,6 +39,67 @@ docker-compose up -d
 
 ---
 
+## 📄 Docker Compose 详细配置
+
+您可以直接使用以下内容创建 `docker-compose.yml` 文件：
+
+```yaml
+version: '3.8'
+
+services:
+  # --- ModernFM All-in-One 服务 (后端 + 前端托管) ---
+  modern-fm:
+    image: flywindW666/modern-fm:latest
+    container_name: modern-fm-app
+    restart: always
+    environment:
+      - DB_URL=postgres://modernfm_user:secure_pass_123@db:5432/modernfm
+      - REDIS_URL=redis:6379
+      - ROOT_DIR=/data
+      - TZ=Asia/Shanghai
+    volumes:
+      - /mnt/user:/data             # 映射 Unraid 或本地数据目录
+      - ./uploads_temp:/app/uploads_temp
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "38866:38866"
+    networks:
+      - modern-fm-net
+
+  # --- 数据库 ---
+  db:
+    image: postgres:15-alpine
+    container_name: modern-fm-db
+    restart: always
+    environment:
+      POSTGRES_USER: modernfm_user
+      POSTGRES_PASSWORD: secure_pass_123
+      POSTGRES_DB: modernfm
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - modern-fm-net
+
+  # --- 缓存 ---
+  redis:
+    image: redis:7-alpine
+    container_name: modern-fm-redis
+    restart: always
+    networks:
+      - modern-fm-net
+
+networks:
+  modern-fm-net:
+    driver: bridge
+
+volumes:
+  db_data:
+```
+
+---
+
 ## 🔗 访问信息
 部署完成后，直接访问后端端口即可进入系统：
 
