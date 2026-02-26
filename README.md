@@ -27,7 +27,7 @@ version: '3.8'
 
 services:
   modern-fm:
-    image: ryantj/modern-fm:latest
+    image: flywindw666/modern-fm:latest
     container_name: modern-fm-app
     restart: always
     environment:
@@ -85,7 +85,7 @@ docker-compose up -d
 ## 🛠️ 快速开始 (克隆仓库方式)
 如果您需要修改源码或查看项目结构：
 ```bash
-git clone https://github.com/flywindW666/ModernFM.git
+git clone https://github.com/flywindw666/ModernFM.git
 cd ModernFM/deploy
 docker-compose up -d
 ```
@@ -102,7 +102,7 @@ version: '3.8'
 services:
   # --- ModernFM All-in-One 服务 (后端 + 前端托管) ---
   modern-fm:
-    image: ryantj/modern-fm:latest
+    image: flywindw666/modern-fm:latest
     container_name: modern-fm-app
     restart: always
     environment:
@@ -167,4 +167,4 @@ volumes:
 - `Dockerfile.all-in-one`: 自动化构建前后端集成镜像的定义文件。
 
 ---
-*Developed by Lucky 🍀 & flywindW666*
+*Developed by Lucky 🍀 & flywindw666*
