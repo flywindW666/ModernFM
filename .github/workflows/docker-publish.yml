@@ -28,5 +28,5 @@ jobs:
           file: ./Dockerfile.all-in-one
           push: true
           tags: |
-            flywindw666/modern-fm:latest
-            flywindw666/modern-fm:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/modern-fm:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/modern-fm:${{ github.sha }}

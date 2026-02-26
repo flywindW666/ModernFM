@@ -1,6 +1,6 @@
 # ModernFM - 现代化多功能文件管理系统 🚀
 
-ModernFM 是一款专为 Unraid 和私有云设计的现代化文件管理器。采用 **All-in-One** 架构，单镜像集成 Go 后端与 Vue 3 前端，部署极简。
+ModernFM 是一款专为 Unraid 和 private 云设计的现代化文件管理器。采用 **All-in-One** 架构，单镜像集成 Go 后端与 Vue 3 前端，部署极简。
 
 ## ✨ 核心特性
 - **📦 All-in-One**: 单个 Docker 镜像即可提供完整的 Web UI 和 API 服务。
@@ -27,7 +27,7 @@ version: '3.8'
 
 services:
   modern-fm:
-    image: flywindw666/modern-fm:latest
+    image: ${DOCKER_USERNAME}/modern-fm:latest
     container_name: modern-fm-app
     restart: always
     environment:
@@ -74,6 +74,8 @@ volumes:
   db_data:
 ```
 
+> **注意**：请将 `${DOCK_USERNAME}` 替换为您的 Docker Hub 用户名（小写）。
+
 ### 2. 启动服务
 在同一目录下运行：
 ```bash
@@ -85,7 +87,7 @@ docker-compose up -d
 ## 🛠️ 快速开始 (克隆仓库方式)
 如果您需要修改源码或查看项目结构：
 ```bash
-git clone https://github.com/flywindw666/ModernFM.git
+git clone https://github.com/flywindW666/ModernFM.git
 cd ModernFM/deploy
 docker-compose up -d
 ```
@@ -102,7 +104,7 @@ version: '3.8'
 services:
   # --- ModernFM All-in-One 服务 (后端 + 前端托管) ---
   modern-fm:
-    image: flywindw666/modern-fm:latest
+    image: ${DOCKER_USERNAME}/modern-fm:latest
     container_name: modern-fm-app
     restart: always
     environment:
@@ -167,4 +169,4 @@ volumes:
 - `Dockerfile.all-in-one`: 自动化构建前后端集成镜像的定义文件。
 
 ---
-*Developed by Lucky 🍀 & flywindw666*
+*Developed by Lucky 🍀 & flywindW666*
