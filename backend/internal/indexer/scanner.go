@@ -94,9 +94,12 @@ func (ix *Indexer) StartFullScan() {
 			UpdatedAt: time.Now(),
 		}
 
-		// 使用更稳定的 Upsert 逻辑
+		// 使用更稳定的 Upsert 逻辑 (修复 Save 操作在冲突时的行为)
 		if err := ix.db.Where("full_path = ?", relPath).Assign(record).FirstOrCreate(&FileRecord{}).Error; err != nil {
-			log.Printf("[Indexer] DB Error for %s: %v", relPath, err)
+			// 如果 FirstOrCreate 依然报错，尝试强制 Save (Update or Create)
+			if err := ix.db.Save(&record).Error; err != nil {
+				log.Printf("[Indexer] DB Error for %s: %v", relPath, err)
+			}
 		}
 		
 		count++
