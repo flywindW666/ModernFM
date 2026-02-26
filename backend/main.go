@@ -26,66 +26,54 @@ func main() {
 
 	r := gin.Default()
 
-	// 1. 静态资源路由 (必须在 NoRoute 之前)
-	// 托管 assets 目录
+	// 1. 静态资源路由 (显式托管 assets 目录)
 	r.Static("/assets", "./frontend-dist/assets")
-	// 托管 favicon
-	r.StaticFile("/favicon.ico", "./frontend-dist/favicon.ico")
+	
+	// 2. 托管 favicon
+	r.File("/favicon.ico", "./frontend-dist/favicon.ico")
 
-	// 2. SPA 路由支持 (兜底所有 404)
+	// 3. API 路由 (必须在 NoRoute 之前)
+	api := r.Group("/api")
+	{
+		api.GET("/files/list", func(c *gin.Context) {
+			relPath := c.DefaultQuery("path", "")
+			var files []indexer.FileRecord
+			
+			// 如果数据库为空，尝试扫描
+			var count int64
+			db.Model(&indexer.FileRecord{}).Count(&count)
+			if count == 0 {
+				root := os.Getenv("ROOT_DIR")
+				if root == "" { root = "/data" }
+				ix := indexer.NewIndexer(db, root)
+				go ix.StartFullScan()
+				c.JSON(200, []indexer.FileRecord{})
+				return
+			}
+
+			db.Where("full_path LIKE ?", relPath+"%").Find(&files)
+			c.JSON(200, files)
+		})
+
+		api.POST("/files/upload", upload.HandleChunkUpload)
+		api.GET("/files/search", func(c *gin.Context) {
+			query := c.Query("q")
+			var results []indexer.FileRecord
+			db.Where("name ILIKE ?", "%"+query+"%").Find(&results)
+			c.JSON(200, results)
+		})
+		api.GET("/video/stream", transcode.StreamVideo)
+	}
+
+	// 4. SPA 兜底路由 (所有非 API、非静态资源的请求都返回 index.html)
 	r.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
-		// 如果是 API 请求但没匹配到路由，返回 404 而不是 index.html
 		if strings.HasPrefix(path, "/api") {
-			c.JSON(404, gin.H{"error": "API not found"})
+			c.JSON(404, gin.H{"error": "API endpoint not found"})
 			return
 		}
-		// 返回前端入口
+		// 返回前端入口文件
 		c.File(filepath.Join("frontend-dist", "index.html"))
-	})
-
-	// 3. 路径遍历逻辑 (API)
-	r.GET("/api/files/list", func(c *gin.Context) {
-		relPath := c.DefaultQuery("path", "")
-		var files []indexer.FileRecord
-		
-		// 统一处理路径前缀
-		prefix := relPath
-		if prefix != "" && !strings.HasSuffix(prefix, "/") {
-			prefix += "/"
-		}
-
-		// 如果数据库为空，启动一次扫描 (临时补救)
-		var count int64
-		db.Model(&indexer.FileRecord{}).Count(&count)
-		if count == 0 {
-			root := os.Getenv("ROOT_DIR")
-			if root == "" {
-				root = "/data"
-			}
-			ix := indexer.NewIndexer(db, root)
-			go ix.StartFullScan()
-			c.JSON(200, []indexer.FileRecord{})
-			return
-		}
-
-		// 修复 SQL：支持精准匹配当前目录及所有子项
-		// 前端现在会处理层级过滤
-		db.Where("full_path LIKE ?", relPath+"%").Find(&files)
-		
-		log.Printf("Query path: [%s], Found items: %d", relPath, len(files))
-		c.JSON(200, files)
-	})
-
-	// 2. 文件上传 (分块)
-	r.POST("/api/files/upload", upload.HandleChunkUpload)
-
-	// 3. 搜索 API
-	r.GET("/api/files/search", func(c *gin.Context) {
-		query := c.Query("q")
-		var results []indexer.FileRecord
-		db.Where("name ILIKE ?", "%"+query+"%").Find(&results)
-		c.JSON(200, results)
 	})
 
 	// 4. 多节点同步
