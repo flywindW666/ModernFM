@@ -51,8 +51,7 @@ func main() {
 			relPath = filepath.ToSlash(filepath.Clean(relPath))
 			if relPath == "." || relPath == "/" { relPath = "" }
 
-			// 按需扫描：进入目录时如果数据库没有记录或需要更新，可以在此触发
-			// 为了保证性能，我们先返回已有数据，后台启动对该目录的扫描
+			// 按需扫描：进入目录时后台启动对该目录的扫描
 			go ix.IndexDir(relPath)
 
 			var files []indexer.FileRecord
@@ -75,6 +74,51 @@ func main() {
 		})
 
 		api.GET("/video/stream", transcode.StreamVideo)
+		api.GET("/video/link", func(c *gin.Context) {
+			path := c.Query("path")
+			player := c.Query("player")
+			link := transcode.GeneratePlayerLink(path, c.Request.Host, player)
+			c.JSON(200, gin.H{"link": link})
+		})
+
+		// 归档操作
+		api.POST("/archive/compress", func(c *gin.Context) {
+			var req struct {
+				Paths  []string `json:"paths"`
+				Target string   `json:"target"`
+			}
+			c.ShouldBindJSON(&req)
+			targetZip := filepath.Join("/data", req.Target)
+			var sources []string
+			for _, p := range req.Paths {
+				sources = append(sources, filepath.Join("/data", p))
+			}
+			if err := archive.CompressZip(sources, targetZip); err != nil {
+				c.JSON(500, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(200, gin.H{"status": "compressed"})
+		})
+
+		api.POST("/archive/extract", func(c *gin.Context) {
+			var req struct {
+				Source string `json:"source"`
+				Dest   string `json:"dest"`
+			}
+			c.ShouldBindJSON(&req)
+			src := filepath.Join("/data", req.Source)
+			dest := filepath.Join("/data", req.Dest)
+			if err := archive.Extract(src, dest); err != nil {
+				c.JSON(500, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(200, gin.H{"status": "extracted"})
+		})
+
+		// 同步接口
+		api.POST("/internal/sync", func(c *gin.Context) {
+			c.JSON(200, gin.H{"status": "received"})
+		})
 	}
 
 	r.NoRoute(func(c *gin.Context) {
