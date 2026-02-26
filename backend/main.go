@@ -38,7 +38,10 @@ func main() {
 			relPath := c.DefaultQuery("path", "")
 			relPath = filepath.ToSlash(filepath.Clean(relPath))
 			if relPath == "." || relPath == "/" { relPath = "" }
-			go ix.IndexDir(relPath)
+			
+			// 同步扫描以确保获取最新结果 (对于目录树加载至关重要)
+			ix.IndexDir(relPath)
+			
 			var files []indexer.FileRecord
 			db.Where("parent = ?", relPath).Find(&files)
 			c.JSON(200, files)

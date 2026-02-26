@@ -1,5 +1,37 @@
 <script setup>
-import { ref, onMounted, computed, watch, onUnmounted } from 'vue'
+import { ref, onMounted, computed, watch, onUnmounted, defineComponent, h } from 'vue'
+
+/**
+ * ModernFM - Full Feature Enterprise Edition
+ * Full Implementation: Upload, Download, Context Menu, Tab Favicon
+ */
+
+// --- 0. Recursive Component Definition ---
+// 使用 defineComponent 并在 setup 中定义递归组件
+const RecursiveTree = defineComponent({
+    name: 'RecursiveTree',
+    props: {
+        node: Object,
+        currentPath: String,
+        navigateTo: Function,
+        toggleFolder: Function
+    },
+    template: `
+        <div class="tree-node mb-1">
+            <div @click="toggleFolder(node)" class="flex items-center gap-2.5 p-2 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" :class="{'bg-blue-50 dark:bg-blue-900/20 text-blue-600 font-bold shadow-sm': currentPath === node.FullPath}">
+                <div class="w-4 h-4 flex items-center justify-center shrink-0">
+                    <i v-if="node.loading" class="fas fa-circle-notch fa-spin text-[10px]"></i>
+                    <i v-else-if="node.IsDir" class="fas fa-caret-right transition-transform" :class="{'rotate-90': node.isOpen, 'opacity-0': node.loaded && !node.children.length}"></i>
+                </div>
+                <i class="fas text-sm" :class="node.FullPath === '' ? 'fa-home' : (node.isOpen ? 'fa-folder-open text-amber-500' : 'fa-folder text-amber-500')"></i>
+                <span @click.stop="navigateTo(node.FullPath)" class="truncate text-sm flex-1">{{ node.Name }}</span>
+            </div>
+            <div v-if="node.isOpen && node.children && node.children.length" class="ml-5 border-l border-slate-200 dark:border-slate-800 pl-2 mt-1 space-y-1">
+                <RecursiveTree v-for="child in node.children" :key="child.FullPath" :node="child" :currentPath="currentPath" :navigateTo="navigateTo" :toggleFolder="toggleFolder" />
+            </div>
+        </div>
+    `
+})
 
 /**
  * ModernFM - Full Feature Enterprise Edition
@@ -59,24 +91,48 @@ const fetchFiles = async (path = '', skipHistory = false) => {
 }
 
 const fetchSubFolders = async (p) => {
-    const res = await fetch(`/api/files/list?path=${encodeURIComponent(p)}`)
-    const data = await res.json()
-    return data.filter(f => f.IsDir).sort((a,b) => a.Name.localeCompare(b.Name))
+    try {
+        const res = await fetch(`/api/files/list?path=${encodeURIComponent(p)}`)
+        if (!res.ok) throw new Error('API Error')
+        const data = await res.json()
+        return Array.isArray(data) ? data.filter(f => f.IsDir).sort((a,b) => a.Name.localeCompare(b.Name)) : []
+    } catch (e) {
+        console.error('fetchSubFolders error:', e)
+        return []
+    }
 }
 
 const initializeTree = async () => {
-    const rootFolders = await fetchSubFolders('')
-    foldersTree.value = [{ Name: '资源库', FullPath: '', children: rootFolders.map(f => ({ ...f, children: [], isOpen: false, loaded: false })), isOpen: true, loaded: true }]
+    try {
+        const rootFolders = await fetchSubFolders('')
+        foldersTree.value = [{ 
+            Name: '资源库', 
+            FullPath: '', 
+            IsDir: true,
+            children: rootFolders.map(f => ({ ...f, children: [], isOpen: false, loaded: false })), 
+            isOpen: true, 
+            loaded: true 
+        }]
+    } catch (e) {
+        console.error('Failed to initialize tree:', e)
+        foldersTree.value = [{ Name: '资源库 (加载失败)', FullPath: '', IsDir: true, children: [], isOpen: true, loaded: true }]
+    }
 }
 
 const toggleFolder = async (node) => {
+    if (!node.IsDir) return
     node.isOpen = !node.isOpen
     if (node.isOpen && !node.loaded) {
         node.loading = true
-        const subs = await fetchSubFolders(node.FullPath)
-        node.children = subs.map(f => ({ ...f, children: [], isOpen: false, loaded: false }))
-        node.loaded = true
-        node.loading = false
+        try {
+            const subs = await fetchSubFolders(node.FullPath)
+            node.children = subs.map(f => ({ ...f, children: [], isOpen: false, loaded: false }))
+            node.loaded = true
+        } catch (e) {
+            console.error('toggleFolder error:', e)
+        } finally {
+            node.loading = false
+        }
     }
 }
 
@@ -248,28 +304,6 @@ onMounted(() => {
     </div>
   </div>
 </template>
-
-<script>
-const RecursiveTree = {
-    name: 'RecursiveTree',
-    props: ['node', 'currentPath', 'navigateTo', 'toggleFolder'],
-    template: `
-        <div class="tree-node mb-1">
-            <div @click="toggleFolder(node)" class="flex items-center gap-2.5 p-2 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" :class="{'bg-blue-50 dark:bg-blue-900/20 text-blue-600 font-bold shadow-sm': currentPath === node.FullPath}">
-                <div class="w-4 h-4 flex items-center justify-center shrink-0">
-                    <i v-if="node.loading" class="fas fa-circle-notch fa-spin text-[10px]"></i>
-                    <i v-else class="fas fa-caret-right transition-transform" :class="{'rotate-90': node.isOpen, 'opacity-0': node.loaded && !node.children.length}"></i>
-                </div>
-                <i class="fas text-sm" :class="node.FullPath === '' ? 'fa-home' : (node.isOpen ? 'fa-folder-open text-amber-500' : 'fa-folder text-amber-500')"></i>
-                <span @click.stop="navigateTo(node.FullPath)" class="truncate text-sm flex-1">{{ node.Name }}</span>
-            </div>
-            <div v-if="node.isOpen" class="ml-5 border-l border-slate-200 dark:border-slate-800 pl-2 mt-1 space-y-1">
-                <RecursiveTree v-for="child in node.children" :key="child.FullPath" :node="child" :currentPath="currentPath" :navigateTo="navigateTo" :toggleFolder="toggleFolder" />
-            </div>
-        </div>
-    `
-}
-</script>
 
 <style>
 @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css');

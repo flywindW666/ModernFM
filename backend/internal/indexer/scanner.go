@@ -53,11 +53,20 @@ func (ix *Indexer) IndexDir(relPath string) {
 	}
 
 	ix.db.Transaction(func(tx *gorm.DB) error {
+		// 1. 获取当前数据库中的子项
+		var existing []FileRecord
+		tx.Where("parent = ?", relPath).Find(&existing)
+		
+		foundMap := make(map[string]bool)
+		
+		// 2. 更新或创建
 		for _, d := range entries {
 			info, err := d.Info()
 			if err != nil { continue }
 			
 			itemPath := filepath.ToSlash(filepath.Join(relPath, d.Name()))
+			foundMap[itemPath] = true
+			
 			fileExt := ""
 			if !d.IsDir() {
 				fileExt = strings.ToLower(filepath.Ext(d.Name()))
@@ -75,6 +84,18 @@ func (ix *Indexer) IndexDir(relPath string) {
 			}
 			tx.Where("full_path = ?", itemPath).Assign(record).FirstOrCreate(&FileRecord{})
 		}
+		
+		// 3. 删除数据库中存在但磁盘上已不存在的项
+		for _, ex := range existing {
+			if !foundMap[ex.FullPath] {
+				tx.Where("full_path = ?", ex.FullPath).Delete(&FileRecord{})
+				// 如果是目录，递归删除其子项
+				if ex.IsDir {
+					tx.Where("full_path LIKE ?", ex.FullPath+"/%").Delete(&FileRecord{})
+				}
+			}
+		}
+		
 		return nil
 	})
 	log.Printf("[Indexer] Incremental scan of '%s' completed.", relPath)
