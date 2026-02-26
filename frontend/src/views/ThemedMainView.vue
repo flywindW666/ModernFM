@@ -103,9 +103,11 @@ const fetchSubFolders = async (p) => {
 }
 
 const initializeTree = async () => {
+    console.log('Initializing tree...');
     try {
         const rootFolders = await fetchSubFolders('')
-        foldersTree.value = [{ 
+        console.log('Root folders fetched:', rootFolders);
+        const treeData = [{ 
             Name: '资源库', 
             FullPath: '', 
             IsDir: true,
@@ -113,6 +115,8 @@ const initializeTree = async () => {
             isOpen: true, 
             loaded: true 
         }]
+        foldersTree.value = treeData
+        console.log('Folders tree set:', foldersTree.value);
     } catch (e) {
         console.error('Failed to initialize tree:', e)
         foldersTree.value = [{ Name: '资源库 (加载失败)', FullPath: '', IsDir: true, children: [], isOpen: true, loaded: true }]
@@ -254,6 +258,9 @@ onMounted(() => {
       <aside :class="{'translate-x-0': isMobileSidebarOpen, '-translate-x-full lg:translate-x-0': !isMobileSidebarOpen}" 
              class="fixed lg:relative inset-y-0 left-0 w-80 bg-white dark:bg-[#161b22] border-r border-slate-200 dark:border-slate-800 z-[60] lg:z-0 transition-transform duration-500 flex flex-col pt-16 lg:pt-0">
         <div class="flex-1 overflow-y-auto p-4 custom-scrollbar">
+           <div v-if="foldersTree.length === 0" class="p-4 text-slate-400 text-sm italic">
+             加载中...
+           </div>
            <div v-for="node in foldersTree" :key="node.FullPath">
               <RecursiveTree :node="node" :currentPath="currentPath" :navigateTo="navigateTo" :toggleFolder="toggleFolder" />
            </div>
