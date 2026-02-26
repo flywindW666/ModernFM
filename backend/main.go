@@ -50,7 +50,15 @@ func main() {
 				return
 			}
 
-			db.Where("full_path LIKE ?", relPath+"%").Find(&files)
+			// 修复根目录模糊匹配问题：
+			// 如果是根目录 ("")，我们只需查找所有不包含 "/" 的记录
+			// 如果是子目录，则查找 path/ 开头的记录
+			queryPath := relPath
+			if queryPath != "" && !strings.HasSuffix(queryPath, "/") {
+				queryPath += "/"
+			}
+			
+			db.Where("full_path LIKE ?", queryPath+"%").Find(&files)
 			c.JSON(200, files)
 		})
 
