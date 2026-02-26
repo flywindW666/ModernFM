@@ -23,7 +23,7 @@ type FileRecord struct {
 	IsDir     bool      `gorm:"index"`
 	Size      int64
 	ModTime   time.Time
-	Extension string    `gorm:"size:20;index"`
+	Extension string    `gorm:"size:100;index"`
 	Hash      string    `gorm:"size:40;index"` // SHA-1，用于排重或校验
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -79,13 +79,19 @@ func (ix *Indexer) StartFullScan() {
 			fileHash = ix.calculateHash(path)
 		}
 
+		// 计算文件 Extension (仅对文件生效，目录后缀置空)
+		fileExt := ""
+		if !d.IsDir() {
+			fileExt = strings.ToLower(filepath.Ext(d.Name()))
+		}
+
 		record := FileRecord{
 			Name:      d.Name(),
 			FullPath:  relPath,
 			IsDir:     d.IsDir(),
 			Size:      info.Size(),
 			ModTime:   info.ModTime(),
-			Extension: strings.ToLower(filepath.Ext(d.Name())),
+			Extension: fileExt,
 			Hash:      fileHash,
 			UpdatedAt: time.Now(),
 		}
