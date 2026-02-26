@@ -1,0 +1,33 @@
+# 单镜像构建阶段
+# Stage 1: Frontend Build
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app
+COPY frontend/package*.json ./
+RUN npm install
+COPY frontend/ .
+RUN npm run build
+
+# Stage 2: Backend Build
+FROM golang:1.23-alpine AS backend-builder
+WORKDIR /app
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+COPY backend/ .
+RUN GOOS=linux GOARCH=amd64 go build -o modern-fm-backend main.go
+
+# Stage 3: Final Image
+FROM alpine:latest
+RUN apk add --no-cache ffmpeg tzdata cifs-utils
+WORKDIR /app
+
+# 从前端构建阶段复制静态文件到后端可访问的目录（例如 dist）
+COPY --from=frontend-builder /app/dist ./frontend-dist
+# 从后端构建阶段复制可执行文件
+COPY --from=backend-builder /app/modern-fm-backend .
+
+# 暴露后端端口
+EXPOSE 38866
+
+ENV GIN_MODE=release
+# 启动后端，后端将负责托管前端静态文件
+CMD ["./modern-fm-backend"]

@@ -25,6 +25,13 @@ func main() {
 
 	r := gin.Default()
 
+	// 托管前端静态文件
+	r.StaticFS("/app", gin.Dir("frontend-dist", true))
+	// 根路径重定向到前端
+	r.GET("/", func(c *gin.Context) {
+		c.Redirect(301, "/app")
+	})
+
 	// 1. 路径遍历逻辑
 	r.GET("/api/files/list", func(c *gin.Context) {
 		relPath := c.DefaultQuery("path", "")

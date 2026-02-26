@@ -1,4 +1,4 @@
-name: Build and Push Docker Images
+name: Build and Push All-in-One Docker Image
 
 on:
   push:
@@ -21,28 +21,12 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Debug Secrets (Masked)
-        run: |
-          echo "User: ${{ secrets.DOCKERHUB_USERNAME }}"
-          if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
-            echo "Error: DOCKERHUB_TOKEN is empty!"
-            exit 1
-          fi
-
-      - name: Build and push Backend
+      - name: Build and push All-in-One Image
         uses: docker/build-push-action@v5
         with:
-          context: ./backend
+          context: .
+          file: ./Dockerfile.all-in-one
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/modern-fm-backend:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/modern-fm-backend:${{ github.sha }}
-
-      - name: Build and push Frontend
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/modern-fm-frontend:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/modern-fm-frontend:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/modern-fm:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/modern-fm:${{ github.sha }}
