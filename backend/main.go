@@ -15,13 +15,37 @@ import (
 	"modern-fm/internal/upload"
 )
 
+// SystemConfig 系统配置表
+type SystemConfig struct {
+	ID    uint   `gorm:"primaryKey"`
+	Key   string `gorm:"uniqueIndex"`
+	Value string
+}
+
 func main() {
 	dsn := os.Getenv("DB_URL")
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatal(err)
 	}
-	db.AutoMigrate(&indexer.FileRecord{})
+	db.AutoMigrate(&indexer.FileRecord{}, &SystemConfig{})
+
+	// 自动检查并触发首次全量扫描
+	var initialScan SystemConfig
+	result := db.Where("key = ?", "initial_scan_completed").First(&initialScan)
+	if result.Error != nil {
+		log.Println("[System] Detecting first run. Triggering automatic full scan...")
+		root := os.Getenv("ROOT_DIR")
+		if root == "" { root = "/data" }
+		ix := indexer.NewIndexer(db, root)
+		
+		// 启动异步扫描并在完成后标记
+		go func() {
+			ix.StartFullScan()
+			db.Create(&SystemConfig{Key: "initial_scan_completed", Value: "true"})
+			log.Println("[System] Initial scan completed and recorded to database.")
+		}()
+	}
 
 	r := gin.Default()
 
@@ -30,7 +54,7 @@ func main() {
 
 	api := r.Group("/api")
 	{
-		// 1. 获取文件列表 (优化版: 只获取直接子项)
+		// 1. 获取文件列表
 		api.GET("/files/list", func(c *gin.Context) {
 			relPath := c.DefaultQuery("path", "")
 			relPath = filepath.ToSlash(filepath.Clean(relPath))
@@ -39,21 +63,7 @@ func main() {
 			}
 
 			var files []indexer.FileRecord
-			
-			// 如果库为空，自动触发扫描
-			var count int64
-			db.Model(&indexer.FileRecord{}).Count(&count)
-			if count == 0 {
-				root := os.Getenv("ROOT_DIR")
-				if root == "" { root = "/data" }
-				ix := indexer.NewIndexer(db, root)
-				go ix.StartFullScan()
-				c.JSON(200, []indexer.FileRecord{})
-				return
-			}
-
-			// 精确匹配父目录字段，确保只返回直接子项，且不包含自身
-			// 这种方式性能最高，且不会出现根目录显示不全或模糊匹配错误的问题
+			// 精确匹配父目录字段
 			db.Where("parent = ?", relPath).Find(&files)
 			
 			log.Printf("[API] Path: '%s', Found: %d", relPath, len(files))
