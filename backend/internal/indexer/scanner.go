@@ -17,7 +17,7 @@ import (
 // FileRecord 定义文件系统的数据库记录模型
 type FileRecord struct {
 	ID        uint      `gorm:"primaryKey"`
-	Parent    string    `gorm:"size:512;index"` // 父目录路径，用于快速查询直接子项
+	Parent    string    `gorm:"size:512;index"` 
 	Name      string    `gorm:"size:255;index"`
 	FullPath  string    `gorm:"uniqueIndex;column:full_path"`
 	IsDir     bool      `gorm:"index"`
@@ -51,15 +51,31 @@ func (ix *Indexer) StartFullScan() {
 
 	defer func() { ix.isRunning = false }()
 
-	log.Printf("[Indexer] Starting deep scan of: %s", ix.rootDir)
+	log.Printf("[Indexer] Starting high-performance bulk scan: %s", ix.rootDir)
 	
+	const batchSize = 100
+	var batch []FileRecord
 	count := 0
-	err := filepath.WalkDir(ix.rootDir, func(path string, d os.DirEntry, err error) error {
+
+	flushBatch := func() {
+		if len(batch) == 0 {
+			return
+		}
+		// 使用 Claused OnConflict 实现高效大批量 Upsert
+		// 这里由于不同数据库方言支持不同，先用事务包围以提升性能
+		ix.db.Transaction(func(tx *gorm.DB) error {
+			for _, item := range batch {
+				tx.Where("full_path = ?", item.FullPath).Assign(item).FirstOrCreate(&FileRecord{})
+			}
+			return nil
+		})
+		batch = nil
+	}
+
+	filepath.WalkDir(ix.rootDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			log.Printf("[Indexer] Error accessing %s: %v", path, err)
 			return nil
 		}
-
 		if path == ix.rootDir {
 			return nil
 		}
@@ -71,12 +87,8 @@ func (ix *Indexer) StartFullScan() {
 		
 		relPath, _ := filepath.Rel(ix.rootDir, path)
 		relPath = filepath.ToSlash(relPath)
-		
-		// 计算父路径
 		parent := filepath.ToSlash(filepath.Dir(relPath))
-		if parent == "." {
-			parent = ""
-		}
+		if parent == "." { parent = "" }
 
 		fileExt := ""
 		if !d.IsDir() {
@@ -94,25 +106,20 @@ func (ix *Indexer) StartFullScan() {
 			UpdatedAt: time.Now(),
 		}
 
-		// 使用更稳定的 Upsert 逻辑 (修复 Save 操作在冲突时的行为)
-		if err := ix.db.Where("full_path = ?", relPath).Assign(record).FirstOrCreate(&FileRecord{}).Error; err != nil {
-			// 如果 FirstOrCreate 依然报错，尝试强制 Save (Update or Create)
-			if err := ix.db.Save(&record).Error; err != nil {
-				log.Printf("[Indexer] DB Error for %s: %v", relPath, err)
-			}
+		batch = append(batch, record)
+		if len(batch) >= batchSize {
+			flushBatch()
 		}
-		
+
 		count++
 		if count % 1000 == 0 {
-			log.Printf("[Indexer] Indexed %d items...", count)
+			log.Printf("[Indexer] Scanned %d items...", count)
 		}
 		return nil
 	})
-	
-	if err != nil {
-		log.Printf("[Indexer] Scan finished with fatal error: %v", err)
-	}
-	log.Printf("[Indexer] Completed. Total items indexed: %d", count)
+
+	flushBatch() // 处理最后一批
+	log.Printf("[Indexer] Completed. Total items: %d", count)
 }
 
 func (ix *Indexer) calculateHash(path string) string {
