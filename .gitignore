@@ -1,0 +1,33 @@
+# .gitignore for ModernFM
+
+# Binaries
+backend/modern-fm-backend
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+vendor/
+
+# Build outputs
+frontend/dist/
+backend/frontend-dist/
+
+# Logs
+*.log
+fm.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+*.env.local
+
+# Docker data (if any in workspace)
+db_data/
+uploads_temp/
