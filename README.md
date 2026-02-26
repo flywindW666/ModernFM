@@ -15,25 +15,78 @@ ModernFM 是一款专为 Unraid 和私有云设计的现代化文件管理器。
 
 ---
 
-## 🛠️ 快速开始 (Docker Compose)
+## 🚀 极简部署 (无需克隆仓库)
 
-我们已经将所有配置集成到了 Compose 文件中，无需配置 `.env`，真正实现开箱即用。
+如果您只想快速启动服务，不需要下载整个源码仓库，只需创建一个 `docker-compose.yml` 文件并运行即可。
 
-### 1. 克隆并进入目录
+### 1. 创建配置文件
+在您的服务器上创建一个目录（例如 `modern-fm`），并在其中新建 `docker-compose.yml`，粘贴以下内容：
+
+```yaml
+version: '3.8'
+
+services:
+  modern-fm:
+    image: flywindw666/modern-fm:latest
+    container_name: modern-fm-app
+    restart: always
+    environment:
+      - DB_URL=postgres://modernfm_user:secure_pass_123@db:5432/modernfm
+      - REDIS_URL=redis:6379
+      - ROOT_DIR=/data
+      - TZ=Asia/Shanghai
+    volumes:
+      - /mnt/user:/data             # 👈 修改为您真实的媒体/数据路径
+      - ./uploads_temp:/app/uploads_temp
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "38866:38866"
+    networks:
+      - modern-fm-net
+
+  db:
+    image: postgres:15-alpine
+    container_name: modern-fm-db
+    restart: always
+    environment:
+      POSTGRES_USER: modernfm_user
+      POSTGRES_PASSWORD: secure_pass_123
+      POSTGRES_DB: modernfm
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - modern-fm-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: modern-fm-redis
+    restart: always
+    networks:
+      - modern-fm-net
+
+networks:
+  modern-fm-net:
+    driver: bridge
+
+volumes:
+  db_data:
+```
+
+### 2. 启动服务
+在同一目录下运行：
+```bash
+docker-compose up -d
+```
+
+---
+
+## 🛠️ 快速开始 (克隆仓库方式)
+如果您需要修改源码或查看项目结构：
 ```bash
 git clone https://github.com/flywindW666/ModernFM.git
 cd ModernFM/deploy
-```
-
-### 2. (可选) 修改数据挂载路径
-编辑 `docker-compose.yml`，将 `/mnt/user` 修改为您真实的媒体/数据存放路径：
-```yaml
-volumes:
-  - /mnt/user:/data  # 将左侧改为您的路径
-```
-
-### 3. 一键启动
-```bash
 docker-compose up -d
 ```
 
