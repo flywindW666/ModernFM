@@ -14,7 +14,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// FileRecord 定义文件系统的数据库记录模型
 type FileRecord struct {
 	ID        uint      `gorm:"primaryKey"`
 	Parent    string    `gorm:"size:512;index"` 
@@ -40,29 +39,57 @@ func NewIndexer(db *gorm.DB, root string) *Indexer {
 	return &Indexer{db: db, rootDir: filepath.Clean(root)}
 }
 
-func (ix *Indexer) StartFullScan() {
-	ix.mu.Lock()
-	if ix.isRunning {
-		ix.mu.Unlock()
+// IndexDir 仅扫描指定目录的直接子项 (用于按需加载)
+func (ix *Indexer) IndexDir(relPath string) {
+	absPath := filepath.Join(ix.rootDir, relPath)
+	entries, err := os.ReadDir(absPath)
+	if err != nil {
+		log.Printf("[Indexer] Error reading dir %s: %v", relPath, err)
 		return
 	}
+
+	ix.db.Transaction(func(tx *gorm.DB) error {
+		for _, d := range entries {
+			info, err := d.Info()
+			if err != nil { continue }
+			
+			itemPath := filepath.ToSlash(filepath.Join(relPath, d.Name()))
+			fileExt := ""
+			if !d.IsDir() {
+				fileExt = strings.ToLower(filepath.Ext(d.Name()))
+			}
+
+			record := FileRecord{
+				Parent:    relPath,
+				Name:      d.Name(),
+				FullPath:  itemPath,
+				IsDir:     d.IsDir(),
+				Size:      info.Size(),
+				ModTime:   info.ModTime(),
+				Extension: fileExt,
+				UpdatedAt: time.Now(),
+			}
+			tx.Where("full_path = ?", itemPath).Assign(record).FirstOrCreate(&FileRecord{})
+		}
+		return nil
+	})
+	log.Printf("[Indexer] Incremental scan of '%s' completed.", relPath)
+}
+
+func (ix *Indexer) StartFullScan() {
+	ix.mu.Lock()
+	if ix.isRunning { ix.mu.Unlock(); return }
 	ix.isRunning = true
 	ix.mu.Unlock()
-
 	defer func() { ix.isRunning = false }()
 
-	log.Printf("[Indexer] Starting high-performance bulk scan: %s", ix.rootDir)
+	log.Printf("[Indexer] Starting background full scan: %s", ix.rootDir)
 	
 	const batchSize = 100
 	var batch []FileRecord
-	count := 0
-
-	flushBatch := func() {
-		if len(batch) == 0 {
-			return
-		}
-		// 使用 Claused OnConflict 实现高效大批量 Upsert
-		// 这里由于不同数据库方言支持不同，先用事务包围以提升性能
+	
+	flush := func() {
+		if len(batch) == 0 { return }
 		ix.db.Transaction(func(tx *gorm.DB) error {
 			for _, item := range batch {
 				tx.Where("full_path = ?", item.FullPath).Assign(item).FirstOrCreate(&FileRecord{})
@@ -73,60 +100,23 @@ func (ix *Indexer) StartFullScan() {
 	}
 
 	filepath.WalkDir(ix.rootDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if path == ix.rootDir {
-			return nil
-		}
-
+		if err != nil || path == ix.rootDir { return nil }
 		info, err := d.Info()
-		if err != nil {
-			return nil
-		}
+		if err != nil { return nil }
 		
-		relPath, _ := filepath.Rel(ix.rootDir, path)
-		relPath = filepath.ToSlash(relPath)
-		parent := filepath.ToSlash(filepath.Dir(relPath))
+		rel, _ := filepath.Rel(ix.rootDir, path)
+		rel = filepath.ToSlash(rel)
+		parent := filepath.ToSlash(filepath.Dir(rel))
 		if parent == "." { parent = "" }
 
-		fileExt := ""
-		if !d.IsDir() {
-			fileExt = strings.ToLower(filepath.Ext(d.Name()))
-		}
-
-		record := FileRecord{
-			Parent:    parent,
-			Name:      d.Name(),
-			FullPath:  relPath,
-			IsDir:     d.IsDir(),
-			Size:      info.Size(),
-			ModTime:   info.ModTime(),
-			Extension: fileExt,
-			UpdatedAt: time.Now(),
-		}
-
-		batch = append(batch, record)
-		if len(batch) >= batchSize {
-			flushBatch()
-		}
-
-		count++
-		if count % 1000 == 0 {
-			log.Printf("[Indexer] Scanned %d items...", count)
-		}
+		batch = append(batch, FileRecord{
+			Parent: parent, Name: d.Name(), FullPath: rel, IsDir: d.IsDir(),
+			Size: info.Size(), ModTime: info.ModTime(), 
+			Extension: strings.ToLower(filepath.Ext(d.Name())), UpdatedAt: time.Now(),
+		})
+		if len(batch) >= batchSize { flush() }
 		return nil
 	})
-
-	flushBatch() // 处理最后一批
-	log.Printf("[Indexer] Completed. Total items: %d", count)
-}
-
-func (ix *Indexer) calculateHash(path string) string {
-	f, err := os.Open(path)
-	if err != nil { return "" }
-	defer f.Close()
-	h := sha1.New()
-	if _, err := io.Copy(h, f); err != nil { return "" }
-	return hex.EncodeToString(h.Sum(nil))
+	flush()
+	log.Println("[Indexer] Full scan completed.")
 }
