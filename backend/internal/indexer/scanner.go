@@ -25,6 +25,13 @@ type FileRecord struct {
 	UpdatedAt time.Time
 }
 
+// SystemConfig 系统配置表
+type SystemConfig struct {
+	ID    uint   `gorm:"primaryKey"`
+	Key   string `gorm:"uniqueIndex"`
+	Value string
+}
+
 type Indexer struct {
 	db       *gorm.DB
 	rootDir  string
