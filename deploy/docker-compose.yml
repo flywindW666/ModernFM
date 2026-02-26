@@ -15,8 +15,10 @@ services:
       - /mnt/user:/data             # 映射您的真实数据目录
       - /mnt/user/appdata/modern-fm/uploads_temp:/app/uploads_temp
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     ports:
       - "38866:38866"
     networks:
@@ -32,7 +34,12 @@ services:
       POSTGRES_PASSWORD: secure_pass_123
       POSTGRES_DB: modernfm
     volumes:
-      - /mnt/user/appdata/modern-fm/db:/var/lib/postgresql/data  # 数据库指定存储路径
+      - /mnt/user/appdata/modern-fm/db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U modernfm_user -d modernfm"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     networks:
       - modern-fm-net
 
