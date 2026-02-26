@@ -1,60 +1,56 @@
 # ModernFM - 现代化多功能文件管理系统 🚀
 
-ModernFM 是一款专为 Unraid 和私有云设计的现代化文件管理器。基于 Docker 部署，采用 Go 后端 + Vue 3 前端，并结合 PostgreSQL 与 Redis 提供极致的性能。
+ModernFM 是一款专为 Unraid 和私有云设计的现代化文件管理器。采用 **All-in-One** 架构，单镜像集成 Go 后端与 Vue 3 前端，部署极简。
 
 ## ✨ 核心特性
-- **🚀 极速响应**: 基于 Go 语言开发，支持百万级文件秒开。
+- **📦 All-in-One**: 单个 Docker 镜像即可提供完整的 Web UI 和 API 服务。
+- **🚀 极速响应**: 基于 Go 语言开发，配合 PostgreSQL 索引，支持百万级文件秒开。
 - **🎨 现代 UI**: 深度复刻 Alist 风格，支持**网格/列表**切换。
-- **🌓 主题切换**: 完美支持浅色、深色及跟随系统主题。
-- **🎬 影音增强**: 支持 **FFmpeg 实时转码**，支持 VLC/Infuse 一键播放。
-- **📝 文档编辑**: 在线预览 PDF/Office，支持 YAML/Markdown 在线编辑。
-- **🛡️ 企业级架构**: 
-  - **PostgreSQL**: 持久化存储文件元数据，搜索快如闪电。
+- **🌓 响应式设计**: 完美支持浅色/深色模式及移动端适配。
+- **🎬 影音增强**: 内置 **FFmpeg 实时转码**，支持跳转 VLC/Infuse/PotPlayer 播放。
+- **📝 全能管理**: 支持大文件**分块上传**、ZIP/TAR 在线压缩与解压。
+- **🛡️ 稳健后端**: 
+  - **PostgreSQL**: 持久化存储元数据，搜索快如闪电。
   - **Redis**: 毫秒级目录缓存。
-  - **分块上传**: 支持大文件分块上传与断点续传。
 
 ---
 
-## 🛠️ 安装说明 (Docker Compose)
+## 🛠️ 快速开始 (Docker Compose)
 
-### 1. 克隆仓库
+我们已经将所有配置集成到了 Compose 文件中，无需配置 `.env`，真正实现开箱即用。
+
+### 1. 克隆并进入目录
 ```bash
 git clone https://github.com/flywindW666/ModernFM.git
 cd ModernFM/deploy
 ```
 
-### 2. 配置环境变量
-复制模板文件并编辑：
-```bash
-cp .env.example .env
+### 2. (可选) 修改数据挂载路径
+编辑 `docker-compose.yml`，将 `/mnt/user` 修改为您真实的媒体/数据存放路径：
+```yaml
+volumes:
+  - /mnt/user:/data  # 将左侧改为您的路径
 ```
-**关键参数说明：**
-- `HOST_DATA_PATH`: 您想在网页上管理的真实文件路径（如 Unraid 的 `/mnt/user`）。
-- `WEB_UI_PORT`: 网页访问端口（默认 80）。
-- `API_PORT`: 后端接口端口（默认 38866）。
 
-### 3. 一键部署
+### 3. 一键启动
 ```bash
 docker-compose up -d
 ```
-*提示：如果是首次运行，系统会自动拉取官方 PostgreSQL/Redis 镜像并构建核心组件。*
 
 ---
 
-## ⚙️ 进阶配置 (.env)
-| 变量名 | 说明 | 默认值 |
-| :--- | :--- | :--- |
-| WEB_UI_PORT | 前端访问端口 | 80 |
-| API_PORT | 后端 API 端口 | 38866 |
-| HOST_DATA_PATH | 宿主机数据挂载路径 | /mnt/user |
-| POSTGRES_PASSWORD | 数据库密码 | secure_pass_123 |
+## 🔗 访问信息
+部署完成后，直接访问后端端口即可进入系统：
+
+- **Web 界面 & API**: `http://<服务器IP>:38866`
 
 ---
 
 ## 📂 项目结构
-- `/backend`: Go 后端源码（包含索引、转码、分块上传逻辑）。
+- `/backend`: Go 后端源码（索引、转码、分块上传）。
 - `/frontend`: Vue 3 + Vite 前端源码。
-- `/deploy`: Docker Compose 部署配置及环境模板。
+- `/deploy`: Docker Compose 一键部署脚本及配置文件。
+- `Dockerfile.all-in-one`: 自动化构建前后端集成镜像的定义文件。
 
 ---
 *Developed by Lucky 🍀 & flywindW666*
