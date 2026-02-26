@@ -1,9 +1,6 @@
 package indexer
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
