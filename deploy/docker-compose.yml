@@ -12,8 +12,8 @@ services:
       - ROOT_DIR=/data
       - TZ=Asia/Shanghai
     volumes:
-      - /mnt/user:/data             # 映射 Unraid 或本地数据目录
-      - ./uploads_temp:/app/uploads_temp
+      - /mnt/user:/data             # 映射您的真实数据目录
+      - /mnt/user/appdata/modern-fm/uploads_temp:/app/uploads_temp
     depends_on:
       - db
       - redis
@@ -32,7 +32,7 @@ services:
       POSTGRES_PASSWORD: secure_pass_123
       POSTGRES_DB: modernfm
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - /mnt/user/appdata/modern-fm/db:/var/lib/postgresql/data  # 数据库指定存储路径
     networks:
       - modern-fm-net
 
@@ -43,14 +43,10 @@ services:
     restart: always
     command: redis-server --save 60 1 --loglevel warning
     volumes:
-      - redis_data:/data
+      - /mnt/user/appdata/modern-fm/redis:/data  # Redis指定存储路径
     networks:
       - modern-fm-net
 
 networks:
   modern-fm-net:
     driver: bridge
-
-volumes:
-  db_data:
-  redis_data:
