@@ -1,6 +1,6 @@
 # ModernFM - 现代化多功能文件管理系统 🚀
 
-ModernFM 是一款专为 Unraid 和 private 云设计的现代化文件管理器。采用 **All-in-One** 架构，单镜像集成 Go 后端与 Vue 3 前端，部署极简。
+ModernFM 是一款专为 Unraid 和私有云设计的现代化文件管理器。采用 **All-in-One** 架构，单镜像集成 Go 后端与 Vue 3 前端，部署极简。
 
 ## ✨ 核心特性
 - **📦 All-in-One**: 单个 Docker 镜像即可提供完整的 Web UI 和 API 服务。
@@ -27,7 +27,7 @@ version: '3.8'
 
 services:
   modern-fm:
-    image: ${DOCKER_USERNAME}/modern-fm:latest
+    image: ryantj/modern-fm:latest
     container_name: modern-fm-app
     restart: always
     environment:
@@ -74,8 +74,6 @@ volumes:
   db_data:
 ```
 
-> **注意**：请将 `${DOCK_USERNAME}` 替换为您的 Docker Hub 用户名（小写）。
-
 ### 2. 启动服务
 在同一目录下运行：
 ```bash
@@ -104,7 +102,7 @@ version: '3.8'
 services:
   # --- ModernFM All-in-One 服务 (后端 + 前端托管) ---
   modern-fm:
-    image: ${DOCKER_USERNAME}/modern-fm:latest
+    image: ryantj/modern-fm:latest
     container_name: modern-fm-app
     restart: always
     environment:
