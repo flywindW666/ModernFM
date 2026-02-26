@@ -51,7 +51,32 @@ func main() {
 	r.GET("/api/files/list", func(c *gin.Context) {
 		relPath := c.DefaultQuery("path", "")
 		var files []indexer.FileRecord
+		
+		// 统一处理路径前缀
+		prefix := relPath
+		if prefix != "" && !strings.HasSuffix(prefix, "/") {
+			prefix += "/"
+		}
+
+		// 如果数据库为空，启动一次扫描 (临时补救)
+		var count int64
+		db.Model(&indexer.FileRecord{}).Count(&count)
+		if count == 0 {
+			root := os.Getenv("ROOT_DIR")
+			if root == "" {
+				root = "/data"
+			}
+			ix := indexer.NewIndexer(db, root)
+			go ix.StartFullScan()
+			c.JSON(200, []indexer.FileRecord{})
+			return
+		}
+
+		// 修复 SQL：支持精准匹配当前目录及所有子项
+		// 前端现在会处理层级过滤
 		db.Where("full_path LIKE ?", relPath+"%").Find(&files)
+		
+		log.Printf("Query path: [%s], Found items: %d", relPath, len(files))
 		c.JSON(200, files)
 	})
 

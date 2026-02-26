@@ -57,13 +57,21 @@ func (ix *Indexer) StartFullScan() {
 	log.Printf("Starting full system scan: %s", ix.rootDir)
 	
 	// 使用 WalkDir 进行高效遍历 (Go 1.16+)
-	filepath.WalkDir(ix.rootDir, func(path string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(ix.rootDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
+			log.Printf("Error accessing path %q: %v\n", path, err)
 			return nil // 忽略无法访问的目录
+		}
+
+		// 忽略根目录自身在数据库中的记录
+		if path == ix.rootDir {
+			return nil
 		}
 
 		info, _ := d.Info()
 		relPath, _ := filepath.Rel(ix.rootDir, path)
+		// 规范化路径分隔符为正斜杠，防止 Windows 环境干扰
+		relPath = filepath.ToSlash(relPath)
 		
 		// 计算文件 Hash (可选，针对大文件可优化为只计算首尾)
 		fileHash := ""
@@ -79,13 +87,18 @@ func (ix *Indexer) StartFullScan() {
 			ModTime:   info.ModTime(),
 			Extension: strings.ToLower(filepath.Ext(d.Name())),
 			Hash:      fileHash,
+			UpdatedAt: time.Now(),
 		}
 
 		// 使用 Upsert (更新或插入) 逻辑
-		return ix.db.Where(FileRecord{FullPath: relPath}).
+		return ix.db.Where("full_path = ?", relPath).
 			Assign(record).
 			FirstOrCreate(&FileRecord{}).Error
 	})
+	
+	if err != nil {
+		log.Printf("WalkDir finished with error: %v", err)
+	}
 	
 	log.Println("Full scan completed.")
 }
