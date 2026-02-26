@@ -3,69 +3,41 @@
 本文档将引导您使用 Docker Compose 一键部署 **ModernFM**。
 
 ## 📋 部署架构
-本套件包含以下 4 个容器：
-1.  **Frontend**: 基于 Nginx 的 Vue 3 前端界面（端口 80）。
-2.  **Backend**: 基于 Go 的高性能后端 API（端口 38866），内置 FFmpeg 转码。
-3.  **Database**: PostgreSQL 15 数据库，存储文件元数据与权限信息。
-4.  **Cache**: Redis 7 缓存，加速目录访问。
+本套件包含以下 3 个容器：
+1.  **ModernFM (All-in-One)**: 核心服务，包含 Go 后端和 Vue 3 前端托管（端口 38866）。
+2.  **Database**: PostgreSQL 15 数据库，存储文件元数据。
+3.  **Cache**: Redis 7 缓存，加速目录访问。
 
 ---
 
 ## 🛠️ 部署步骤
 
 ### 1. 准备工作
-确保您的系统中已安装：
-- Docker
-- Docker Compose (v2.0+)
+确保您的系统中已安装 Docker 和 Docker Compose。
 
-### 2. 获取代码
-如果您还没有代码，可以从 GitHub 克隆：
-```bash
-git clone https://github.com/flywindW666/ModernFM.git
-cd ModernFM
-```
+### 2. 配置与启动
+我们已经将所有配置集成到了 `deploy/docker-compose.yml` 中，您只需确认数据路径：
 
-### 3. 配置数据挂载
-编辑 `deploy/docker-compose.yml` 文件，将您的 Unraid 或本地数据路径挂载到后端容器：
-
-```yaml
-services:
-  backend:
+1.  进入部署目录：
+    ```bash
+    cd deploy
+    ```
+2.  （可选）根据需要修改 `docker-compose.yml` 中的数据路径：
+    ```yaml
     volumes:
       - /mnt/user:/data  # 将左侧改为您的真实数据路径
-```
-
-### 4. 一键启动
-在项目根目录下，直接运行我为您写好的部署脚本：
-```bash
-bash deploy.sh
-```
-或者手动运行 Compose 命令：
-```bash
-docker-compose -f deploy/docker-compose.yml up -d --build
-```
+    ```
+3.  一键启动：
+    ```bash
+    docker-compose up -d
+    ```
 
 ---
 
 ## 🔗 访问信息
-部署完成后，您可以通过以下地址访问：
+部署完成后，直接访问后端端口即可看到界面：
 
-- **Web UI**: `http://<服务器IP>:80`
-- **API 接口**: `http://<服务器IP>:38866`
-
----
-
-## ⚙️ 环境变量说明
-您可以在 `deploy/docker-compose.yml` 中修改以下参数：
-- `DB_URL`: PostgreSQL 连接字符串。
-- `REDIS_URL`: Redis 服务地址。
-- `ROOT_DIR`: 后端管理文件的起始根目录（默认 `/data`）。
-
----
-
-## 💾 数据持久化
-- 数据库数据存储在宿主机的 `./data/postgres` 目录。
-- 缓存数据存储在宿主机的 `./data/redis` 目录。
+- **Web UI & API**: `http://<服务器IP>:38866`
 
 ---
 *Developed & Packaged by Lucky 🍀*

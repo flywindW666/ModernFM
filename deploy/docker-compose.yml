@@ -1,64 +1,43 @@
 version: '3.8'
 
 services:
-  # --- 后端 API 服务 ---
-  backend:
-    image: ${DOCKERHUB_USERNAME:-flywindW666}/modern-fm-backend:latest
-    container_name: modern-fm-backend
-    # 如果本地没有镜像且不想从仓库拉取，可以保留 build 段落
-    # build:
-    #   context: ../backend
-    #   dockerfile: Dockerfile
+  # --- ModernFM All-in-One 服务 (后端 + 前端托管) ---
+  modern-fm:
+    image: flywindW666/modern-fm:latest
+    container_name: modern-fm-app
     restart: always
     environment:
-      - DB_URL=postgres://${POSTGRES_USER:-modernfm_user}:${POSTGRES_PASSWORD:-secure_pass_123}@db:5432/${POSTGRES_DB:-modernfm}
+      # 所有数据库和缓存配置直接写死在 Compose 中，无需外部 .env
+      - DB_URL=postgres://modernfm_user:secure_pass_123@db:5432/modernfm
       - REDIS_URL=redis:6379
-      - ROOT_DIR=${FILE_ROOT_DIR:-/data}
-      - APP_PORT=${API_PORT:-38866}
+      - ROOT_DIR=/data
       - TZ=Asia/Shanghai
     volumes:
-      - ${HOST_DATA_PATH:-/mnt/user}:/data
-      - ./uploads_temp:/app/uploads_temp # 分块上传临时目录
+      - /mnt/user:/data             # 映射 Unraid 或本地数据目录
+      - ./uploads_temp:/app/uploads_temp
     depends_on:
       - db
       - redis
     ports:
-      - "${API_PORT:-38866}:${API_PORT:-38866}"
+      - "38866:38866"
     networks:
       - modern-fm-net
 
-  # --- 前端 UI 服务 ---
-  frontend:
-    image: ${DOCKERHUB_USERNAME:-flywindW666}/modern-fm-frontend:latest
-    container_name: modern-fm-frontend
-    # build:
-    #   context: ../frontend
-    #   dockerfile: Dockerfile
-    restart: always
-    environment:
-      - VITE_API_URL=http://localhost:${API_PORT:-38866}
-    ports:
-      - "${WEB_UI_PORT:-80}:80"
-    depends_on:
-      - backend
-    networks:
-      - modern-fm-net
-
-  # --- 数据库 (官方源) ---
+  # --- 数据库 ---
   db:
     image: postgres:15-alpine
     container_name: modern-fm-db
     restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-modernfm_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_pass_123}
-      POSTGRES_DB: ${POSTGRES_DB:-modernfm}
+      POSTGRES_USER: modernfm_user
+      POSTGRES_PASSWORD: secure_pass_123
+      POSTGRES_DB: modernfm
     volumes:
       - db_data:/var/lib/postgresql/data
     networks:
       - modern-fm-net
 
-  # --- 缓存 (官方源) ---
+  # --- 缓存 ---
   redis:
     image: redis:7-alpine
     container_name: modern-fm-redis
