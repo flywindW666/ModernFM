@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # --- ModernFM All-in-One 服务 (后端 + 前端托管) ---
   modern-fm:
-    image: flywindw666/modern-fm:latest
+    image: ryantj/modern-fm:latest
     container_name: modern-fm-app
     restart: always
     environment:
