@@ -25,11 +25,25 @@ func main() {
 
 	r := gin.Default()
 
-	// 托管前端静态文件
-	r.StaticFS("/app", gin.Dir("frontend-dist", true))
-	// 根路径重定向到前端
-	r.GET("/", func(c *gin.Context) {
-		c.Redirect(301, "/app")
+	// 1. 优先托管前端静态文件
+	// 如果是静态文件（带后缀的），直接从 frontend-dist 找
+	r.NoRoute(func(c *gin.Context) {
+		path := c.Request.URL.Path
+		// 如果访问的是 API，继续交给路由处理器
+		if strings.HasPrefix(path, "/api") {
+			c.Next()
+			return
+		}
+		
+		// 否则尝试提供静态文件
+		fullPath := filepath.Join("frontend-dist", path)
+		if _, err := os.Stat(fullPath); err == nil && !strings.HasSuffix(path, "/") {
+			c.File(fullPath)
+			return
+		}
+		
+		// SPA 路由支持：其他所有非 API 请求都返回 index.html
+		c.File(filepath.Join("frontend-dist", "index.html"))
 	})
 
 	// 1. 路径遍历逻辑
