@@ -1,53 +1,32 @@
 <script setup>
-import { ref, onMounted, watchEffect } from 'vue'
+import { onMounted } from 'vue'
 import ThemedMainView from './views/ThemedMainView.vue'
 
-// 全局主题管理逻辑
-const theme = ref(localStorage.getItem('fm-theme') || 'auto')
-
-const updateTheme = () => {
-  const isDark = theme.value === 'dark' || 
-    (theme.value === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)
-  
-  if (isDark) {
-    document.documentElement.classList.add('dark')
-  } else {
-    document.documentElement.classList.remove('dark')
-  }
-}
-
-watchEffect(() => {
-  localStorage.setItem('fm-theme', theme.value)
-  updateTheme()
-})
-
 onMounted(() => {
-  updateTheme()
-  // 监听系统主题变化
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateTheme)
+  // 确保 body 撑满全屏且不滚动
+  document.body.style.margin = '0'
+  document.body.style.height = '100vh'
+  document.body.style.overflow = 'hidden'
 })
 </script>
 
 <template>
-  <div class="modern-fm-app">
-    <!-- 注入主题切换控制的全局视图 -->
-    <ThemedMainView />
-  </div>
+  <ThemedMainView />
 </template>
 
 <style>
-/* 全局基础样式 */
-html, body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
+/* 全局样式覆盖 */
+:root {
+  color-scheme: light dark;
 }
 
-/* 适配深色模式的滚动条 */
-.dark ::-webkit-scrollbar-thumb {
-  background-color: #3f3f46;
+html, body, #app {
+  height: 100%;
+  width: 100%;
 }
-.dark ::-webkit-scrollbar-track {
-  background-color: #18181b;
+
+/* 适配移动端的点击反馈 */
+* {
+  -webkit-tap-highlight-color: transparent;
 }
 </style>
