@@ -111,25 +111,27 @@ const initializeTree = async () => {
         const rootFolders = await fetchSubFolders('')
         console.log('Root folders fetched, count:', rootFolders.length);
         
-        // 关键修复：先构建完整对象，最后一次性赋值
+        // 关键点：不再依赖 defineComponent 内部递归，改为手动注入
+        const buildNode = (f) => ({
+            Name: f.Name,
+            FullPath: f.FullPath,
+            IsDir: true,
+            children: [],
+            isOpen: false,
+            loaded: false
+        });
+
         const rootNode = { 
             Name: '资源库', 
             FullPath: '', 
             IsDir: true,
-            children: rootFolders.map(f => ({ 
-                Name: f.Name,
-                FullPath: f.FullPath,
-                IsDir: true,
-                children: [], 
-                isOpen: false, 
-                loaded: false 
-            })), 
+            children: rootFolders.map(buildNode), 
             isOpen: true, 
             loaded: true 
         };
         
         foldersTree.value = [rootNode];
-        console.log('Folders tree populated');
+        console.log('Folders tree populated successfully');
     } catch (e) {
         console.error('Failed to initialize tree:', e)
     }
