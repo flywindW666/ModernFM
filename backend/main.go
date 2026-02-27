@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,99 +11,69 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"modern-fm/internal/indexer"
-	"modern-fm/internal/transcode"
-	"modern-fm/internal/upload"
 )
 
 func main() {
+	// 1. 初始化数据库
 	dsn := os.Getenv("DB_URL")
+	if dsn == "" {
+		dsn = "host=db user=modernfm_user password=secure_pass_123 dbname=modernfm port=5432 sslmode=disable"
+	}
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to connect database: %v", err)
 	}
-	db.AutoMigrate(&indexer.FileRecord{}, &indexer.SystemConfig{})
+	db.AutoMigrate(&indexer.FileRecord{})
 
-	root := os.Getenv("ROOT_DIR")
-	if root == "" { root = "/data" }
-	ix := indexer.NewIndexer(db, root)
-	go ix.IndexDir("")
+	// 2. 初始化扫描器
+	rootDir := os.Getenv("ROOT_DIR")
+	if rootDir == "" {
+		rootDir = "/data"
+	}
+	ix := indexer.NewIndexer(db, rootDir)
 
+	// 3. 路由设置
 	r := gin.Default()
 
+	// 静态文件
 	r.Static("/assets", "./frontend-dist/assets")
 	r.StaticFile("/favicon.ico", "./frontend-dist/favicon.ico")
 
 	api := r.Group("/api")
 	{
+		// 统一的列表接口：支持按需加载目录树和文件列表
 		api.GET("/files/list", func(c *gin.Context) {
-			relPath := c.DefaultQuery("path", "")
-			relPath = filepath.ToSlash(filepath.Clean(relPath))
-			if relPath == "." || relPath == "/" { relPath = "" }
-			
-			// 同步扫描以确保获取最新结果 (对于目录树加载至关重要)
-			ix.IndexDir(relPath)
-			
-			var files []indexer.FileRecord
-			db.Where("parent = ?", relPath).Find(&files)
-			c.JSON(200, files)
+			path := c.DefaultQuery("path", "")
+			path = filepath.ToSlash(filepath.Clean(path))
+			if path == "." || path == "/" {
+				path = ""
+			}
+
+			files, err := ix.ScanDir(path)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, files)
 		})
 
 		// 下载
 		api.GET("/files/download", func(c *gin.Context) {
-			relPath := c.Query("path")
-			fullPath := filepath.Join(root, relPath)
-			c.FileAttachment(fullPath, filepath.Base(fullPath))
+			path := c.Query("path")
+			full := filepath.Join(rootDir, path)
+			c.FileAttachment(full, filepath.Base(full))
 		})
-
-		// 上传
-		api.POST("/files/upload", upload.HandleChunkUpload)
-
-		// 基础操作
-		api.POST("/files/action", func(c *gin.Context) {
-			var req struct {
-				Action string   `json:"action"`
-				Paths  []string `json:"paths"`
-				NewName string  `json:"newName"`
-			}
-			if err := c.ShouldBindJSON(&req); err != nil {
-				c.JSON(400, gin.H{"error": "invalid params"})
-				return
-			}
-
-			switch req.Action {
-			case "delete":
-				for _, p := range req.Paths {
-					os.RemoveAll(filepath.Join(root, p))
-					db.Where("full_path = ? OR full_path LIKE ?", p, p+"/%").Delete(&indexer.FileRecord{})
-				}
-			case "rename":
-				if len(req.Paths) > 0 {
-					oldRel := req.Paths[0]
-					oldAbs := filepath.Join(root, oldRel)
-					newAbs := filepath.Join(filepath.Dir(oldAbs), req.NewName)
-					os.Rename(oldAbs, newAbs)
-                    go ix.IndexDir(filepath.ToSlash(filepath.Dir(oldRel)))
-				}
-			}
-			c.JSON(200, gin.H{"status": "ok"})
-		})
-
-		api.POST("/system/rescan", func(c *gin.Context) {
-			go ix.StartFullScan()
-			c.JSON(200, gin.H{"status": "full_scan_started"})
-		})
-
-		api.GET("/video/stream", transcode.StreamVideo)
 	}
 
+	// SPA 回退
 	r.NoRoute(func(c *gin.Context) {
-		path := c.Request.URL.Path
-		if strings.HasPrefix(path, "/api") {
-			c.JSON(404, gin.H{"error": "Not Found"})
+		if strings.HasPrefix(c.Request.URL.Path, "/api") {
+			c.Status(404)
 			return
 		}
 		c.File(filepath.Join("frontend-dist", "index.html"))
 	})
 
+	log.Println("ModernFM Backend starting on :38866")
 	r.Run(":38866")
 }

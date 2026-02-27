@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -13,135 +12,75 @@ import (
 
 type FileRecord struct {
 	ID        uint      `gorm:"primaryKey"`
-	Parent    string    `gorm:"size:512;index"` 
+	Parent    string    `gorm:"size:1024;index"` // 父目录路径
 	Name      string    `gorm:"size:255;index"`
-	FullPath  string    `gorm:"uniqueIndex;column:full_path"`
+	FullPath  string    `gorm:"uniqueIndex;column:full_path;size:2048"`
 	IsDir     bool      `gorm:"index"`
 	Size      int64
 	ModTime   time.Time
-	Extension string    `gorm:"size:100;index"`
-	Hash      string    `gorm:"size:40;index"` 
-	CreatedAt time.Time
+	Extension string `gorm:"size:100;index"`
 	UpdatedAt time.Time
 }
 
-// SystemConfig 系统配置表
-type SystemConfig struct {
-	ID    uint   `gorm:"primaryKey"`
-	Key   string `gorm:"uniqueIndex"`
-	Value string
-}
-
 type Indexer struct {
-	db       *gorm.DB
-	rootDir  string
-	mu       sync.Mutex
-	isRunning bool
+	db      *gorm.DB
+	rootDir string
 }
 
 func NewIndexer(db *gorm.DB, root string) *Indexer {
 	return &Indexer{db: db, rootDir: filepath.Clean(root)}
 }
 
-// IndexDir 仅扫描指定目录的直接子项 (用于按需加载)
-func (ix *Indexer) IndexDir(relPath string) {
+// ScanDir 扫描特定目录并同步数据库
+func (ix *Indexer) ScanDir(relPath string) ([]FileRecord, error) {
 	absPath := filepath.Join(ix.rootDir, relPath)
 	entries, err := os.ReadDir(absPath)
 	if err != nil {
-		log.Printf("[Indexer] Error reading dir %s: %v", relPath, err)
-		return
+		return nil, err
 	}
 
-	ix.db.Transaction(func(tx *gorm.DB) error {
-		// 1. 获取当前数据库中的子项
-		var existing []FileRecord
-		tx.Where("parent = ?", relPath).Find(&existing)
-		
-		foundMap := make(map[string]bool)
-		
-		// 2. 更新或创建
-		for _, d := range entries {
-			info, err := d.Info()
-			if err != nil { continue }
-			
-			itemPath := filepath.ToSlash(filepath.Join(relPath, d.Name()))
-			foundMap[itemPath] = true
-			
-			fileExt := ""
-			if !d.IsDir() {
-				fileExt = strings.ToLower(filepath.Ext(d.Name()))
-			}
+	var currentRecords []FileRecord
+	foundMap := make(map[string]bool)
 
-			record := FileRecord{
-				Parent:    relPath,
-				Name:      d.Name(),
-				FullPath:  itemPath,
-				IsDir:     d.IsDir(),
-				Size:      info.Size(),
-				ModTime:   info.ModTime(),
-				Extension: fileExt,
-				UpdatedAt: time.Now(),
-			}
-			tx.Where("full_path = ?", itemPath).Assign(record).FirstOrCreate(&FileRecord{})
-		}
-		
-		// 3. 删除数据库中存在但磁盘上已不存在的项
-		for _, ex := range existing {
-			if !foundMap[ex.FullPath] {
-				tx.Where("full_path = ?", ex.FullPath).Delete(&FileRecord{})
-				// 如果是目录，递归删除其子项
-				if ex.IsDir {
-					tx.Where("full_path LIKE ?", ex.FullPath+"/%").Delete(&FileRecord{})
-				}
-			}
-		}
-		
-		return nil
-	})
-	log.Printf("[Indexer] Incremental scan of '%s' completed.", relPath)
-}
-
-func (ix *Indexer) StartFullScan() {
-	ix.mu.Lock()
-	if ix.isRunning { ix.mu.Unlock(); return }
-	ix.isRunning = true
-	ix.mu.Unlock()
-	defer func() { ix.isRunning = false }()
-
-	log.Printf("[Indexer] Starting background full scan: %s", ix.rootDir)
-	
-	const batchSize = 100
-	var batch []FileRecord
-	
-	flush := func() {
-		if len(batch) == 0 { return }
-		ix.db.Transaction(func(tx *gorm.DB) error {
-			for _, item := range batch {
-				tx.Where("full_path = ?", item.FullPath).Assign(item).FirstOrCreate(&FileRecord{})
-			}
-			return nil
-		})
-		batch = nil
-	}
-
-	filepath.WalkDir(ix.rootDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || path == ix.rootDir { return nil }
+	for _, d := range entries {
 		info, err := d.Info()
-		if err != nil { return nil }
-		
-		rel, _ := filepath.Rel(ix.rootDir, path)
-		rel = filepath.ToSlash(rel)
-		parent := filepath.ToSlash(filepath.Dir(rel))
-		if parent == "." { parent = "" }
+		if err != nil {
+			continue
+		}
 
-		batch = append(batch, FileRecord{
-			Parent: parent, Name: d.Name(), FullPath: rel, IsDir: d.IsDir(),
-			Size: info.Size(), ModTime: info.ModTime(), 
-			Extension: strings.ToLower(filepath.Ext(d.Name())), UpdatedAt: time.Now(),
-		})
-		if len(batch) >= batchSize { flush() }
-		return nil
-	})
-	flush()
-	log.Println("[Indexer] Full scan completed.")
+		itemPath := filepath.ToSlash(filepath.Join(relPath, d.Name()))
+		if relPath == "" || relPath == "/" {
+			itemPath = d.Name()
+		}
+		foundMap[itemPath] = true
+
+		record := FileRecord{
+			Parent:    filepath.ToSlash(relPath),
+			Name:      d.Name(),
+			FullPath:  itemPath,
+			IsDir:     d.IsDir(),
+			Size:      info.Size(),
+			ModTime:   info.ModTime(),
+			Extension: strings.ToLower(filepath.Ext(d.Name())),
+			UpdatedAt: time.Now(),
+		}
+		currentRecords = append(currentRecords, record)
+
+		// Upsert 逻辑
+		ix.db.Where("full_path = ?", itemPath).Assign(record).FirstOrCreate(&FileRecord{})
+	}
+
+	// 清理数据库中已删除的文件
+	var dbRecords []FileRecord
+	ix.db.Where("parent = ?", relPath).Find(&dbRecords)
+	for _, dr := range dbRecords {
+		if !foundMap[dr.FullPath] {
+			ix.db.Delete(&dr)
+			if dr.IsDir {
+				ix.db.Where("full_path LIKE ?", dr.FullPath+"/%").Delete(&FileRecord{})
+			}
+		}
+	}
+
+	return currentRecords, nil
 }
