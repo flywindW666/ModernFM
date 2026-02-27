@@ -16,6 +16,9 @@ const RecursiveTree = defineComponent({
         navigateTo: Function,
         toggleFolder: Function
     },
+    setup(props) {
+        return { props }
+    },
     template: `
         <div class="tree-node mb-1">
             <div @click="toggleFolder(node)" class="flex items-center gap-2.5 p-2 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" :class="{'bg-blue-50 dark:bg-blue-900/20 text-blue-600 font-bold shadow-sm': currentPath === node.FullPath}">
@@ -104,6 +107,7 @@ const fetchSubFolders = async (p) => {
 
 const initializeTree = async () => {
     console.log('Initializing tree...');
+    foldersTree.value = []; // 先清空，确保触发重新渲染
     try {
         const rootFolders = await fetchSubFolders('')
         console.log('Root folders fetched:', rootFolders);
@@ -117,15 +121,32 @@ const initializeTree = async () => {
             loaded: true 
         };
         foldersTree.value = [rootNode];
-        console.log('Folders tree set successfully:', foldersTree.value);
+        console.log('Folders tree set successfully:', JSON.stringify(foldersTree.value));
     } catch (e) {
         console.error('Failed to initialize tree:', e)
         foldersTree.value = [{ Name: '资源库 (加载失败)', FullPath: '', IsDir: true, children: [], isOpen: true, loaded: true }]
     }
 }
 
-// 强制刷新树的方法
-const refreshTree = () => initializeTree()
+const refreshTree = () => {
+    console.log('Manual tree refresh triggered');
+    isSettingsOpen.value = false;
+    initializeTree();
+}
+
+const rescanSystem = async () => {
+    console.log('Manual rescan triggered');
+    isSettingsOpen.value = false;
+    isLoading.value = true;
+    try {
+        await fetch('/api/system/rescan', { method: 'POST' });
+        await fetchFiles(currentPath.value, true);
+    } catch (e) {
+        console.error('Rescan error:', e);
+    } finally {
+        isLoading.value = false;
+    }
+}
 
 const toggleFolder = async (node) => {
     if (!node.IsDir) return
@@ -253,7 +274,7 @@ onMounted(() => {
            <button @click="theme = 'auto'" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"><i class="fas fa-desktop w-5"></i> 跟随系统</button>
            <div class="h-px bg-slate-100 dark:bg-slate-800 my-2 mx-2"></div>
            <button @click="refreshTree" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"><i class="fas fa-project-diagram w-5"></i> 重载目录树</button>
-           <button @click="fetchFiles(currentPath, true)" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"><i class="fas fa-sync-alt w-5"></i> 刷新文件库</button>
+           <button @click="rescanSystem" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"><i class="fas fa-sync-alt w-5"></i> 刷新文件库</button>
         </div>
       </div>
     </header>
