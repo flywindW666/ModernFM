@@ -107,21 +107,25 @@ const initializeTree = async () => {
     try {
         const rootFolders = await fetchSubFolders('')
         console.log('Root folders fetched:', rootFolders);
-        const treeData = [{ 
+        // 关键点：将数据放入一个临时的普通数组，然后再整体赋值给 foldersTree.value
+        const rootNode = { 
             Name: '资源库', 
             FullPath: '', 
             IsDir: true,
             children: rootFolders.map(f => ({ ...f, children: [], isOpen: false, loaded: false })), 
             isOpen: true, 
             loaded: true 
-        }]
-        foldersTree.value = treeData
-        console.log('Folders tree set:', foldersTree.value);
+        };
+        foldersTree.value = [rootNode];
+        console.log('Folders tree set successfully:', foldersTree.value);
     } catch (e) {
         console.error('Failed to initialize tree:', e)
         foldersTree.value = [{ Name: '资源库 (加载失败)', FullPath: '', IsDir: true, children: [], isOpen: true, loaded: true }]
     }
 }
+
+// 强制刷新树的方法
+const refreshTree = () => initializeTree()
 
 const toggleFolder = async (node) => {
     if (!node.IsDir) return
@@ -248,6 +252,7 @@ onMounted(() => {
            <button @click="theme = 'dark'" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"><i class="fas fa-moon w-5"></i> 暗黑模式</button>
            <button @click="theme = 'auto'" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"><i class="fas fa-desktop w-5"></i> 跟随系统</button>
            <div class="h-px bg-slate-100 dark:bg-slate-800 my-2 mx-2"></div>
+           <button @click="refreshTree" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"><i class="fas fa-project-diagram w-5"></i> 重载目录树</button>
            <button @click="fetchFiles(currentPath, true)" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-sm"><i class="fas fa-sync-alt w-5"></i> 刷新文件库</button>
         </div>
       </div>
