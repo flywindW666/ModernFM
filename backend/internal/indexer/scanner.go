@@ -1,6 +1,7 @@
 package indexer
 
 import (
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,7 @@ import (
 
 type FileRecord struct {
 	ID        uint      `gorm:"primaryKey"`
-	Parent    string    `gorm:"size:1024;index"` // 父目录路径
+	Parent    string    `gorm:"size:1024;index"`
 	Name      string    `gorm:"size:255;index"`
 	FullPath  string    `gorm:"uniqueIndex;column:full_path;size:2048"`
 	IsDir     bool      `gorm:"index"`
@@ -30,18 +31,17 @@ func NewIndexer(db *gorm.DB, root string) *Indexer {
 	return &Indexer{db: db, rootDir: filepath.Clean(root)}
 }
 
-// ScanDir 扫描特定目录并同步数据库
 func (ix *Indexer) ScanDir(relPath string) ([]FileRecord, error) {
 	absPath := filepath.Join(ix.rootDir, relPath)
-	log.Printf("[Indexer] Scanning absolute path: %s", absPath)
+	log.Printf("[Indexer] Scanning path: %s", absPath)
 	
 	entries, err := os.ReadDir(absPath)
 	if err != nil {
-		log.Printf("[Indexer] ReadDir Error: %v", err)
+		log.Printf("[Indexer] Error reading dir %s: %v", absPath, err)
 		return nil, err
 	}
 
-	var currentRecords []FileRecord
+	currentRecords := make([]FileRecord, 0) // 初始化为空切片而不是 nil
 	foundMap := make(map[string]bool)
 
 	for _, d := range entries {
@@ -65,16 +65,13 @@ func (ix *Indexer) ScanDir(relPath string) ([]FileRecord, error) {
 		}
 		currentRecords = append(currentRecords, record)
 
-		// Upsert 逻辑
 		ix.db.Where("full_path = ?", itemPath).Assign(record).FirstOrCreate(&FileRecord{})
 	}
 
-	// 清理数据库中已删除的文件
 	var dbRecords []FileRecord
 	ix.db.Where("parent = ?", filepath.ToSlash(relPath)).Find(&dbRecords)
 	for _, dr := range dbRecords {
 		if !foundMap[dr.FullPath] {
-			log.Printf("[Indexer] Deleting missing record: %s", dr.FullPath)
 			ix.db.Delete(&dr)
 			if dr.IsDir {
 				ix.db.Where("full_path LIKE ?", dr.FullPath+"/%").Delete(&FileRecord{})
