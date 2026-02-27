@@ -32,6 +32,9 @@ const RecursiveTree = defineComponent({
     `
 })
 
+// 为生产构建手动注册组件
+const components = { RecursiveTree }
+
 /**
  * ModernFM - Full Feature Enterprise Edition
  * Full Implementation: Upload, Download, Context Menu, Tab Favicon
