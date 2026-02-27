@@ -1,3 +1,4 @@
+import { LOGO_SVG } from '../logo.js'
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 import RecursiveTree from '../components/RecursiveTree.vue'
@@ -97,6 +98,10 @@ const applyTheme = (v) => {
 watch(theme, (v) => { localStorage.setItem(THEME_KEY, v); applyTheme(v) })
 
 onMounted(() => {
+  // 动态设置 Favicon
+  let link = document.querySelector("link[rel~='icon']");
+  if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+  link.href = "data:image/svg+xml," + encodeURIComponent(LOGO_SVG);
   applyTheme(theme.value)
   navigateTo(currentPath.value)
   initializeTree()
@@ -123,7 +128,7 @@ const formatSize = (bytes) => {
     <!-- 左侧目录树 (Requirement 1: Alist Style Sidebar) -->
     <aside class="w-72 border-r border-slate-200 dark:border-slate-800 flex flex-col shrink-0">
       <div class="h-14 flex items-center px-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
-        <span class="font-bold text-lg tracking-tight italic text-blue-600">XFileManager</span>
+        <div class="flex items-center gap-3"><div class="w-8 h-8" v-html="LOGO_SVG"></div><span class="font-bold text-lg tracking-tight italic text-blue-600">XFileManager</span></div>
       </div>
       
       <div class="flex-1 overflow-y-auto p-3 custom-scrollbar">
