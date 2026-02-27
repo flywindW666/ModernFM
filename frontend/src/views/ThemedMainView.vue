@@ -16,7 +16,7 @@ const RecursiveTree = defineComponent({
         toggleFolder: Function
     },
     template: `
-        <div class="tree-node mb-1">
+        <div class="tree-node mb-1" style="display: block !important; visibility: visible !important; opacity: 1 !important;">
             <div @click="toggleFolder(node)" class="flex items-center gap-2.5 p-2 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" :class="{'bg-blue-50 dark:bg-blue-900/20 text-blue-600 font-bold shadow-sm': currentPath === node.FullPath}">
                 <div class="w-4 h-4 flex items-center justify-center shrink-0">
                     <i v-if="node.loading" class="fas fa-circle-notch fa-spin text-[10px]"></i>
@@ -106,17 +106,19 @@ const initializeTree = async () => {
     foldersTree.value = []; 
     try {
         const rootFolders = await fetchSubFolders('')
-        console.log('Root folders fetched:', rootFolders);
-        // 直接构建响应式对象
-        foldersTree.value = [{ 
+        console.log('Root folders fetched, count:', rootFolders.length);
+        
+        const rootNode = { 
             Name: '资源库', 
             FullPath: '', 
             IsDir: true,
             children: rootFolders.map(f => ({ ...f, children: [], isOpen: false, loaded: false })), 
             isOpen: true, 
             loaded: true 
-        }];
-        console.log('Folders tree set successfully');
+        };
+        
+        foldersTree.value = [rootNode];
+        console.log('Folders tree set successfully, root node children count:', foldersTree.value[0].children.length);
     } catch (e) {
         console.error('Failed to initialize tree:', e)
         foldersTree.value = [{ Name: '资源库 (加载失败)', FullPath: '', IsDir: true, children: [], isOpen: true, loaded: true }]
@@ -277,12 +279,13 @@ onMounted(() => {
     <div class="flex flex-1 overflow-hidden relative">
       <!-- Left Tree -->
       <aside :class="{'translate-x-0': isMobileSidebarOpen, '-translate-x-full lg:translate-x-0': !isMobileSidebarOpen}" 
-             class="fixed lg:relative inset-y-0 left-0 w-80 bg-white dark:bg-[#161b22] border-r border-slate-200 dark:border-slate-800 z-[60] lg:z-0 transition-transform duration-500 flex flex-col pt-16 lg:pt-0">
-        <div class="flex-1 overflow-y-auto p-4 custom-scrollbar" style="min-height: 200px;">
+             class="fixed lg:relative inset-y-0 left-0 w-80 bg-white dark:bg-[#161b22] border-r border-slate-200 dark:border-slate-800 z-[60] lg:z-0 transition-transform duration-500 flex flex-col pt-16 lg:pt-0"
+             style="display: flex !important; visibility: visible !important;">
+        <div class="flex-1 overflow-y-auto p-4 custom-scrollbar" style="min-height: 300px; display: block !important;">
            <div v-if="foldersTree.length === 0" class="p-4 text-slate-400 text-sm italic">
-             加载中...
+             目录树加载中...
            </div>
-           <div v-for="node in foldersTree" :key="node.FullPath">
+           <div v-for="node in foldersTree" :key="node.FullPath" class="tree-root-container">
               <RecursiveTree :node="node" :currentPath="currentPath" :navigateTo="navigateTo" :toggleFolder="toggleFolder" />
            </div>
         </div>
