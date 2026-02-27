@@ -12,7 +12,7 @@ import (
 
 type FileRecord struct {
 	ID        uint      `gorm:"primaryKey"`
-	Parent    string    `gorm:"size:1024;index"`
+	Parent    string    `gorm:"size:1024;index"` // 父目录路径
 	Name      string    `gorm:"size:255;index"`
 	FullPath  string    `gorm:"uniqueIndex;column:full_path;size:2048"`
 	IsDir     bool      `gorm:"index"`
@@ -31,40 +31,7 @@ func NewIndexer(db *gorm.DB, root string) *Indexer {
 	return &Indexer{db: db, rootDir: filepath.Clean(root)}
 }
 
-func (ix *Indexer) StartFullScan() {
-	log.Printf("[Indexer] Starting background full scan: %s", ix.rootDir)
-	filepath.WalkDir(ix.rootDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		rel, _ := filepath.Rel(ix.rootDir, path)
-		if rel == "." {
-			return nil
-		}
-		
-		rel = filepath.ToSlash(rel)
-		parent := filepath.ToSlash(filepath.Dir(rel))
-		if parent == "." {
-			parent = ""
-		}
-
-		info, _ := d.Info()
-		record := FileRecord{
-			Parent:    parent,
-			Name:      d.Name(),
-			FullPath:  rel,
-			IsDir:     d.IsDir(),
-			Size:      info.Size(),
-			ModTime:   info.ModTime(),
-			Extension: strings.ToLower(filepath.Ext(d.Name())),
-			UpdatedAt: time.Now(),
-		}
-		ix.db.Where("full_path = ?", rel).Assign(record).FirstOrCreate(&FileRecord{})
-		return nil
-	})
-	log.Println("[Indexer] Full scan completed.")
-}
-
+// ScanDir 还原为上一版：仅扫描当前目录，不进行后台全量扫描
 func (ix *Indexer) ScanDir(relPath string) ([]FileRecord, error) {
 	absPath := filepath.Join(ix.rootDir, relPath)
 	log.Printf("[Indexer] Scanning path: %s", absPath)
@@ -99,14 +66,11 @@ func (ix *Indexer) ScanDir(relPath string) ([]FileRecord, error) {
 		}
 		currentRecords = append(currentRecords, record)
 
+		// 仅更新当前层级
 		ix.db.Where("full_path = ?", itemPath).Assign(record).FirstOrCreate(&FileRecord{})
-		
-		// 递归策略：如果是目录，且您原来的设定是需要深度扫描，我们在这里触发异步扫描
-		if d.IsDir() {
-			go ix.ScanDir(itemPath)
-		}
 	}
 
+	// 清理数据库中已删除的文件
 	var dbRecords []FileRecord
 	ix.db.Where("parent = ?", filepath.ToSlash(relPath)).Find(&dbRecords)
 	for _, dr := range dbRecords {

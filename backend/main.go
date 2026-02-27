@@ -38,7 +38,6 @@ func main() {
 	ix := indexer.NewIndexer(db, rootDir)
 
 	// 启动全量扫描（您原来的后台同步策略）
-	go ix.StartFullScan()
 
 	// 3. 路由设置
 	r := gin.Default()

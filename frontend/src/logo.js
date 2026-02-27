@@ -5,13 +5,20 @@ export const LOGO_SVG = `
       <stop offset="0%" stop-color="#8B5CF6"/>
       <stop offset="100%" stop-color="#6366F1"/>
     </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feOffset dx="0" dy="4" result="offsetBlur" />
+      <feMerge><feMergeNode in="offsetBlur" /><feMergeNode in="SourceGraphic" /></feMerge>
+    </filter>
   </defs>
-  <rect width="256" height="256" rx="60" fill="url(#bgGrad)" />
-  <path d="M60 100C60 94.4772 64.4772 90 70 90H110L125 105H186C191.523 105 196 109.477 196 115V176C196 181.523 191.523 186 186 186H70C64.4772 186 60 181.523 60 176V100Z" fill="white" />
-  <path d="M165 45L205 85M205 45L165 85" stroke="white" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
-  <circle cx="165" cy="45" r="5" fill="white" />
-  <circle cx="205" cy="85" r="5" fill="white" />
-  <circle cx="205" cy="45" r="5" fill="white" />
-  <circle cx="165" cy="85" r="5" fill="white" />
+  <rect width="256" height="256" rx="60" fill="url(#bgGrad)" filter="url(#glow)" />
+  <path d="M70 110C70 104.477 74.4772 100 80 100H120L135 115H176C181.523 115 186 119.477 186 125V186C186 191.523 181.523 196 176 196H80C74.4772 196 70 191.523 70 186V110Z" fill="white" />
+  <g>
+    <path d="M165 45L205 85M205 45L165 85" stroke="white" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="165" cy="45" r="5" fill="white" />
+    <circle cx="205" cy="85" r="5" fill="white" />
+    <circle cx="205" cy="45" r="5" fill="white" />
+    <circle cx="165" cy="85" r="5" fill="white" />
+  </g>
 </svg>
 `;
