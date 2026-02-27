@@ -123,7 +123,7 @@ const formatSize = (bytes) => {
     <!-- 左侧目录树 (Requirement 1: Alist Style Sidebar) -->
     <aside class="w-72 border-r border-slate-200 dark:border-slate-800 flex flex-col shrink-0">
       <div class="h-14 flex items-center px-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
-        <span class="font-bold text-lg tracking-tight italic text-blue-600">ModernFM</span>
+        <span class="font-bold text-lg tracking-tight italic text-blue-600">XFileManager</span>
       </div>
       
       <div class="flex-1 overflow-y-auto p-3 custom-scrollbar">

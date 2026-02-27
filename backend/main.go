@@ -101,6 +101,6 @@ func main() {
 		c.File(filepath.Join("frontend-dist", "index.html"))
 	})
 
-	log.Println("ModernFM Backend starting on :38866")
+	log.Println("XFileManager Backend starting on :38866")
 	r.Run(":38866")
 }

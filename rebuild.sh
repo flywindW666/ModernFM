@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "🚀 Rebuilding ModernFM from Scratch..."
+echo "🚀 Rebuilding XFileManager from Scratch..."
 sudo docker compose -f deploy/docker-compose.yml down
 sudo docker system prune -f
 sudo docker compose -f deploy/docker-compose.yml up -d --build
