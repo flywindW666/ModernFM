@@ -12,9 +12,16 @@ const viewMode = ref('grid') // 'grid' or 'list'
 // --- 目录树核心逻辑 ---
 
 const fetchSubFolders = async (path) => {
-  const res = await fetch(`/api/files/list?path=${encodeURIComponent(path)}`)
-  const data = await res.json()
-  return data.filter(f => f.IsDir).sort((a, b) => a.Name.localeCompare(b.Name))
+  try {
+    const res = await fetch(`/api/files/list?path=${encodeURIComponent(path)}`)
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
+    const data = await res.json()
+    // 强制过滤出文件夹，排除隐藏目录（以点开头的）以提升目录树整洁度
+    return data.filter(f => f.IsDir && !f.Name.startsWith('.')).sort((a, b) => a.Name.localeCompare(b.Name))
+  } catch (e) {
+    console.error(`Fetch subfolders failed for ${path}:`, e)
+    return []
+  }
 }
 
 const initializeTree = async () => {
