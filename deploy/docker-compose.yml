@@ -12,8 +12,8 @@ services:
       - ROOT_DIR=/data
       - TZ=Asia/Shanghai
     volumes:
-      - /mnt/user:/data             # 映射您的真实数据目录
-      - /mnt/user/appdata/modern-fm/uploads_temp:/app/uploads_temp
+      - /home/ryan:/data             # 映射 Ubuntu 当前用户的家目录
+      - /home/ryan/appdata/modern-fm/uploads_temp:/app/uploads_temp
     depends_on:
       db:
         condition: service_healthy
@@ -34,7 +34,7 @@ services:
       POSTGRES_PASSWORD: secure_pass_123
       POSTGRES_DB: modernfm
     volumes:
-      - /mnt/user/appdata/modern-fm/db:/var/lib/postgresql/data
+      - /home/ryan/appdata/modern-fm/db:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U modernfm_user -d modernfm"]
       interval: 5s
@@ -50,7 +50,7 @@ services:
     restart: always
     command: redis-server --save 60 1 --loglevel warning
     volumes:
-      - /mnt/user/appdata/modern-fm/redis:/data  # Redis指定存储路径
+      - /home/ryan/appdata/modern-fm/redis:/data  # Redis指定存储路径
     networks:
       - modern-fm-net
 

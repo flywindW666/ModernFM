@@ -18,16 +18,26 @@ const fetchSubFolders = async (path) => {
 }
 
 const initializeTree = async () => {
+  console.log('Initializing tree...');
   try {
     const rootSubs = await fetchSubFolders('')
+    console.log('Root subs:', rootSubs);
     treeData.value = [{
       Name: '资源库',
       FullPath: '',
       IsDir: true,
       isOpen: true,
       loaded: true,
-      children: rootSubs.map(f => ({ ...f, children: [], isOpen: false, loaded: false }))
+      children: rootSubs.map(f => ({ 
+        Name: f.Name,
+        FullPath: f.FullPath,
+        IsDir: true,
+        children: [], 
+        isOpen: false, 
+        loaded: false 
+      }))
     }]
+    console.log('Tree data initialized:', treeData.value);
   } catch (e) {
     console.error('Tree init failed', e)
   }
