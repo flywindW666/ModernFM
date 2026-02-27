@@ -28,14 +28,17 @@ const initializeTree = async () => {
   console.log('Initializing tree...');
   try {
     const rootSubs = await fetchSubFolders('')
-    console.log('Root subs:', rootSubs);
+    console.log('Root subs fetched:', rootSubs);
+    if (!rootSubs || rootSubs.length === 0) {
+      console.warn('No subfolders found for root');
+    }
     treeData.value = [{
       Name: '资源库',
       FullPath: '',
       IsDir: true,
       isOpen: true,
       loaded: true,
-      children: rootSubs.map(f => ({ 
+      children: (rootSubs || []).map(f => ({ 
         Name: f.Name,
         FullPath: f.FullPath,
         IsDir: true,
@@ -44,7 +47,7 @@ const initializeTree = async () => {
         loaded: false 
       }))
     }]
-    console.log('Tree data initialized:', treeData.value);
+    console.log('Tree data state:', treeData.value);
   } catch (e) {
     console.error('Tree init failed', e)
   }
