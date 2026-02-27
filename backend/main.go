@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"modern-fm/internal/indexer"
+	"modern-fm/internal/cache"
 )
 
 func main() {
@@ -25,12 +27,18 @@ func main() {
 	}
 	db.AutoMigrate(&indexer.FileRecord{})
 
-	// 2. 初始化扫描器
+	// 2. 初始化缓存
+	rdb := cache.NewCache()
+
+	// 3. 初始化扫描器
 	rootDir := os.Getenv("ROOT_DIR")
 	if rootDir == "" {
 		rootDir = "/data"
 	}
 	ix := indexer.NewIndexer(db, rootDir)
+
+	// 启动全量扫描（您原来的后台同步策略）
+	go ix.StartFullScan()
 
 	// 3. 路由设置
 	r := gin.Default()
@@ -52,12 +60,27 @@ func main() {
 
 			log.Printf("API Request: /files/list?path=%s", path)
 
+			// 尝试从缓存读取
+			cacheKey := "list:" + path
+			if val, err := rdb.Get(c.Request.Context(), cacheKey); err == nil {
+				c.Header("X-Cache", "HIT")
+				c.Data(http.StatusOK, "application/json; charset=utf-8", []byte(val))
+				return
+			}
+
 			files, err := ix.ScanDir(path)
 			if err != nil {
 				log.Printf("ScanDir Error: %v", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
+			
+			// 写入缓存
+			if jsonBytes, err := json.Marshal(files); err == nil {
+				rdb.Set(c.Request.Context(), cacheKey, string(jsonBytes))
+			}
+
+			c.Header("X-Cache", "MISS")
 			c.JSON(http.StatusOK, files)
 		})
 

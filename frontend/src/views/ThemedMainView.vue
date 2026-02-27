@@ -87,10 +87,25 @@ const navigateTo = async (path) => {
   }
 }
 
+const THEME_KEY = 'fm-theme'
+const theme = ref(localStorage.getItem(THEME_KEY) || 'auto')
+
+const applyTheme = (v) => {
+    const isDark = v === 'dark' || (v === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+    document.documentElement.classList.toggle('dark', isDark)
+}
+watch(theme, (v) => { localStorage.setItem(THEME_KEY, v); applyTheme(v) })
+
 onMounted(() => {
+  applyTheme(theme.value)
   navigateTo(currentPath.value)
   initializeTree()
 })
+
+const isSettingsOpen = ref(false)
+const toggleTheme = () => {
+  theme.value = theme.value === 'light' ? 'dark' : 'light'
+}
 
 // --- 辅助功能 ---
 const formatSize = (bytes) => {
@@ -138,6 +153,9 @@ const formatSize = (bytes) => {
         </div>
 
         <div class="flex items-center gap-3">
+          <button @click="toggleTheme" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500">
+            <component :is="theme === 'dark' ? FileText : Settings" class="w-4 h-4" />
+          </button>
           <button @click="viewMode = viewMode === 'grid' ? 'list' : 'grid'" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500">
             <component :is="viewMode === 'grid' ? List : Grid" class="w-4 h-4" />
           </button>
