@@ -7,7 +7,6 @@ import { ref, onMounted, computed, watch, onUnmounted, defineComponent, h } from
  */
 
 // --- 0. Recursive Component Definition ---
-// 使用 defineComponent 并在 setup 中定义递归组件
 const RecursiveTree = defineComponent({
     name: 'RecursiveTree',
     props: {
@@ -15,9 +14,6 @@ const RecursiveTree = defineComponent({
         currentPath: String,
         navigateTo: Function,
         toggleFolder: Function
-    },
-    setup(props) {
-        return { props }
     },
     template: `
         <div class="tree-node mb-1">
@@ -107,21 +103,20 @@ const fetchSubFolders = async (p) => {
 
 const initializeTree = async () => {
     console.log('Initializing tree...');
-    foldersTree.value = []; // 先清空，确保触发重新渲染
+    foldersTree.value = []; 
     try {
         const rootFolders = await fetchSubFolders('')
         console.log('Root folders fetched:', rootFolders);
-        // 关键点：将数据放入一个临时的普通数组，然后再整体赋值给 foldersTree.value
-        const rootNode = { 
+        // 直接构建响应式对象
+        foldersTree.value = [{ 
             Name: '资源库', 
             FullPath: '', 
             IsDir: true,
             children: rootFolders.map(f => ({ ...f, children: [], isOpen: false, loaded: false })), 
             isOpen: true, 
             loaded: true 
-        };
-        foldersTree.value = [rootNode];
-        console.log('Folders tree set successfully:', JSON.stringify(foldersTree.value));
+        }];
+        console.log('Folders tree set successfully');
     } catch (e) {
         console.error('Failed to initialize tree:', e)
         foldersTree.value = [{ Name: '资源库 (加载失败)', FullPath: '', IsDir: true, children: [], isOpen: true, loaded: true }]
@@ -283,7 +278,7 @@ onMounted(() => {
       <!-- Left Tree -->
       <aside :class="{'translate-x-0': isMobileSidebarOpen, '-translate-x-full lg:translate-x-0': !isMobileSidebarOpen}" 
              class="fixed lg:relative inset-y-0 left-0 w-80 bg-white dark:bg-[#161b22] border-r border-slate-200 dark:border-slate-800 z-[60] lg:z-0 transition-transform duration-500 flex flex-col pt-16 lg:pt-0">
-        <div class="flex-1 overflow-y-auto p-4 custom-scrollbar">
+        <div class="flex-1 overflow-y-auto p-4 custom-scrollbar" style="min-height: 200px;">
            <div v-if="foldersTree.length === 0" class="p-4 text-slate-400 text-sm italic">
              加载中...
            </div>
