@@ -70,15 +70,18 @@ const toggleFolder = async (node) => {
 // --- 文件列表逻辑 ---
 
 const navigateTo = async (path) => {
+  console.log('Navigating to:', path)
   currentPath.value = path
   localStorage.setItem('fm-last-path', path)
   isLoading.value = true
   try {
     const res = await fetch(`/api/files/list?path=${encodeURIComponent(path)}`)
     const data = await res.json()
-    files.value = data.sort((a, b) => (b.IsDir - a.IsDir) || a.Name.localeCompare(b.Name))
+    // 关键修复：确保 data 是数组，防止后端异常返回 null 时导致 UI 崩溃
+    files.value = (Array.isArray(data) ? data : []).sort((a, b) => (b.IsDir - a.IsDir) || a.Name.localeCompare(b.Name))
   } catch (e) {
     console.error('Fetch files failed', e)
+    files.value = []
   } finally {
     isLoading.value = false
   }
