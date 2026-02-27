@@ -3,7 +3,9 @@ version: '3.8'
 services:
   # --- ModernFM All-in-One 服务 (后端 + 前端托管) ---
   modern-fm:
-    image: ryantj/modern-fm:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile.all-in-one
     container_name: modern-fm-app
     restart: always
     environment:

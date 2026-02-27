@@ -2,6 +2,8 @@
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app
 COPY frontend/package*.json ./
+# 使用淘宝镜像加速 npm install
+RUN npm config set registry https://registry.npmmirror.com
 RUN npm install
 COPY frontend/ .
 RUN npm run build
@@ -9,10 +11,10 @@ RUN npm run build
 # Stage 2: Backend Build
 FROM golang:1.23-alpine AS backend-builder
 WORKDIR /app
-COPY backend/go.mod ./
-# 移除 go.sum 复制，因为我们重新生成了依赖
-RUN go mod download
 COPY backend/ .
+# 使用 goproxy.cn 加速 go mod tidy
+RUN go env -w GOPROXY=https://goproxy.cn,direct
+RUN go mod tidy
 RUN GOOS=linux GOARCH=amd64 go build -o modern-fm-backend main.go
 
 # Stage 3: Final Image

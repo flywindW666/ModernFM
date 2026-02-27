@@ -1,7 +1,6 @@
 package indexer
 
 import (
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,8 +33,11 @@ func NewIndexer(db *gorm.DB, root string) *Indexer {
 // ScanDir 扫描特定目录并同步数据库
 func (ix *Indexer) ScanDir(relPath string) ([]FileRecord, error) {
 	absPath := filepath.Join(ix.rootDir, relPath)
+	log.Printf("[Indexer] Scanning absolute path: %s", absPath)
+	
 	entries, err := os.ReadDir(absPath)
 	if err != nil {
+		log.Printf("[Indexer] ReadDir Error: %v", err)
 		return nil, err
 	}
 
@@ -49,9 +51,6 @@ func (ix *Indexer) ScanDir(relPath string) ([]FileRecord, error) {
 		}
 
 		itemPath := filepath.ToSlash(filepath.Join(relPath, d.Name()))
-		if relPath == "" || relPath == "/" {
-			itemPath = d.Name()
-		}
 		foundMap[itemPath] = true
 
 		record := FileRecord{
@@ -72,9 +71,10 @@ func (ix *Indexer) ScanDir(relPath string) ([]FileRecord, error) {
 
 	// 清理数据库中已删除的文件
 	var dbRecords []FileRecord
-	ix.db.Where("parent = ?", relPath).Find(&dbRecords)
+	ix.db.Where("parent = ?", filepath.ToSlash(relPath)).Find(&dbRecords)
 	for _, dr := range dbRecords {
 		if !foundMap[dr.FullPath] {
+			log.Printf("[Indexer] Deleting missing record: %s", dr.FullPath)
 			ix.db.Delete(&dr)
 			if dr.IsDir {
 				ix.db.Where("full_path LIKE ?", dr.FullPath+"/%").Delete(&FileRecord{})

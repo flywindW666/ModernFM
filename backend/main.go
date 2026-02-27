@@ -44,13 +44,17 @@ func main() {
 		// 统一的列表接口：支持按需加载目录树和文件列表
 		api.GET("/files/list", func(c *gin.Context) {
 			path := c.DefaultQuery("path", "")
-			path = filepath.ToSlash(filepath.Clean(path))
-			if path == "." || path == "/" {
+			// 移除 Clean 以免将空路径变成 "." 导致扫描根目录失败
+			if path == "/" || path == "." {
 				path = ""
 			}
+			path = filepath.ToSlash(path)
+
+			log.Printf("API Request: /files/list?path=%s", path)
 
 			files, err := ix.ScanDir(path)
 			if err != nil {
+				log.Printf("ScanDir Error: %v", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
